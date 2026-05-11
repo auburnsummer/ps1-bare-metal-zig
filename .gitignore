@@ -1,0 +1,9 @@
+*.elf
+*.o
+*.psexe
+
+.zig-cache/
+zig-out/
+build/
+
+.DS_Store

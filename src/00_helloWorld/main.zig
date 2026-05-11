@@ -55,7 +55,8 @@ fn printCharacter(char: u8) void {
 }
 
 // Use the _start entry point in Zig, not main.
-// If you call it main, Zig will include a standard library wrapper around it.
+// If you call it main, Zig will include a standard library wrapper around it,
+// which does not currently work with MIPS-I target.
 export fn _start() noreturn {
     // Reset the serial interface and initialize it to output data at 115200bps,
     // 8 data bits, 1 stop bit and no parity.

@@ -8,7 +8,7 @@ pub const F_CPU = 33868800;
 const KSEG1: u32 = 0xA000_0000;
 
 /// 1F80104Ah+N*10h - SIO#_CTRL (R/W)
-pub const SioControl = packed struct(u16) {
+pub const SerialIoControl = packed struct(u16) {
     txEnable: bool = false,
     dtrOutputLevel: bool = false,
     rxEnable: bool = false,
@@ -28,12 +28,12 @@ pub const SioControl = packed struct(u16) {
 // Note on naming conventions: anything that is memory mapped to a hardware register is getting LOUD_YELLING_CASE to match
 // the original C code. This is somewhat against Zig naming convention but I think it's nice to be able to tell at a glance
 // when something is a peripheral.
-pub fn SIO_CTRL(comptime n: u1) *volatile SioControl {
+pub fn SIO_CTRL(comptime n: u1) *volatile SerialIoControl {
     return @ptrFromInt(KSEG1 + 0x1F80_104A + (0x10 * @as(u32, n)));
 }
 
 /// 1F801048h+N*10h - SIO#_MODE (R/W)
-pub const SioMode = packed struct(u16) {
+pub const SerialIoMode = packed struct(u16) {
     baudrateReloadFactor: u2 = 0b00,
     characterLength: u2 = 0b00,
     parityEnable: bool = false,
@@ -42,7 +42,7 @@ pub const SioMode = packed struct(u16) {
     sio0ClockPolarity: bool = false,
     _padding: u7 = 0,
 };
-pub fn SIO_MODE(comptime n: u1) *volatile SioMode {
+pub fn SIO_MODE(comptime n: u1) *volatile SerialIoMode {
     return @ptrFromInt((KSEG1 + 0x1F80_1048) + (0x10 * @as(u32, n)));
 }
 
@@ -52,7 +52,7 @@ pub fn SIO_BAUD(comptime n: u1) *volatile u16 {
 }
 
 /// 1F801044h+N*10h - SIO#_STAT (R)
-pub const SioStat = packed struct(u32) {
+pub const SerialIoStat = packed struct(u32) {
     txNotFull: bool = false,
     rxNotEmpty: bool = false,
     txIdle: bool = false,
@@ -67,7 +67,7 @@ pub const SioStat = packed struct(u32) {
     baudrateTimer: u21 = 0,
 };
 
-pub fn SIO_STAT(comptime n: u1) *volatile SioStat {
+pub fn SIO_STAT(comptime n: u1) *volatile SerialIoStat {
     return @ptrFromInt((KSEG1 + 0x1F80_1044) + (0x10 * @as(u32, n)));
 }
 

@@ -9,7 +9,8 @@ using Zig instead.
 This is mostly an educational project for myself, however, I hope that it
 might be a little bit useful if anyone else ends up searching for something similar.
 
-So far I have managed to get SERIAL WORKING woohoo!
+So far I have managed to get SERIAL WORKING woohoo! nothing on the screen yet
+though.
 
 ## BIG DISCLAIMER
 
@@ -17,7 +18,7 @@ When you try to compile Zig for MIPS-I, it has a warning `MIPS-I support is expe
 
 I have decided to naively ignore this. This is almost certainly going to
 bite me once I work further through the ps1-bare-metal examples and run
-into something that isn't supported properly yet (...probably the GTE stuff)
+into something that isn't supported properly yet (...likely the GTE stuff but we'll see)
 
 
 [1]: https://github.com/spicyjpeg/ps1-bare-metal

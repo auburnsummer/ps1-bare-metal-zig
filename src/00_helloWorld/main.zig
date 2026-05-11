@@ -47,9 +47,9 @@ fn printCharacter(char: u8) void {
     // *not* send any data until it is asserted. To avoid blocking forever if
     // CTS is not asserted, we have to check for it manually and abort if
     // necessary.
-    while (psx.SIO_STAT(1).*.sio1CtsInputLevel and !psx.SIO_STAT(1).*.txNotFull) {}
+    while (psx.SIO_STAT(1).sio1CtsInputLevel and !psx.SIO_STAT(1).txNotFull) {}
 
-    if (psx.SIO_STAT(1).*.sio1CtsInputLevel) {
+    if (psx.SIO_STAT(1).sio1CtsInputLevel) {
         psx.SIO_TX_DATA(1).* = char;
     }
 }
@@ -60,7 +60,7 @@ fn printCharacter(char: u8) void {
 export fn _start() noreturn {
     // Reset the serial interface and initialize it to output data at 115200bps,
     // 8 data bits, 1 stop bit and no parity.
-    psx.SIO_CTRL(1).*.reset = true;
+    psx.SIO_CTRL(1).reset = true;
 
     psx.SIO_MODE(1).* = .{
         .baudrateReloadFactor = 1,

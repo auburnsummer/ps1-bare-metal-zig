@@ -5,26 +5,26 @@
 # you might be wondering, why not cmake?
 # i am scared of cmake
 
-.DEFAULT_GOAL := build/helloWorld.psexe
+.DEFAULT_GOAL := build/00_helloWorld.psexe
 
-build/helloWorld.o: src/00_helloWorld/*
+build/00_helloWorld.o: src/00_helloWorld/* $(shell find -L src/00_helloWorld/* -type f)
 	zig build-obj \
 		-target mipsel-freestanding \
 		-mcpu mips1 \
 		-fno-compiler-rt \
 		./src/00_helloWorld/main.zig \
-		-femit-bin=build/helloWorld.o
+		-femit-bin=build/00_helloWorld.o
 
-build/helloWorld.elf: build/helloWorld.o
+build/00_helloWorld.elf: build/00_helloWorld.o
 	zig ld.lld \
 		-T ./build_helpers/executable.ld \
-		-o build/helloWorld.elf build/helloWorld.o
+		-o build/00_helloWorld.elf build/00_helloWorld.o
 
-build/helloWorld.psexe: build/helloWorld.elf
-	python3 ./build_helpers/convertExecutable.py build/helloWorld.elf build/helloWorld.psexe
+build/00_helloWorld.psexe: build/00_helloWorld.elf
+	python3 ./build_helpers/convertExecutable.py build/00_helloWorld.elf build/00_helloWorld.psexe
 
 
-build/01_basicGraphics.o: src/01_basicGraphics/*
+build/01_basicGraphics.o: $(shell find -L src/01_basicGraphics/* -type f)
 	zig build-obj \
 		-target mipsel-freestanding \
 		-mcpu mips1 \

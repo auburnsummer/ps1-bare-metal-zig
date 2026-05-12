@@ -7,8 +7,18 @@ pub const F_CPU = 33868800;
 /// The documentation linked above gives memory locations as an offset from here.
 const KSEG1: u32 = 0xA000_0000;
 
+// // // // // //
+// Serial I/O  //
+// // // // // //
+
 /// 1F80104Ah+N*10h - SIO#_CTRL (R/W)
 pub const SerialIoControl = packed struct(u16) {
+    pub const RxInterruptMode = enum(u2) {
+        one_byte,
+        two_bytes,
+        four_bytes,
+        eight_bytes,
+    };
     txEnable: bool = false,
     dtrOutputLevel: bool = false,
     rxEnable: bool = false,
@@ -17,7 +27,7 @@ pub const SerialIoControl = packed struct(u16) {
     sio1RtsOutputLevel: bool = false,
     reset: bool = false,
     sio1Unknown: bool = false,
-    rxInterruptMode: u2 = 0b00,
+    rxInterruptMode: RxInterruptMode = .OneByte,
     txInterruptEnable: bool = false,
     rxInterruptEnable: bool = false,
     dsrInterruptEnable: bool = false,
@@ -34,7 +44,14 @@ pub fn SIO_CTRL(comptime n: u1) *volatile SerialIoControl {
 
 /// 1F801048h+N*10h - SIO#_MODE (R/W)
 pub const SerialIoMode = packed struct(u16) {
-    baudrateReloadFactor: u2 = 0b00,
+    pub const BaudrateReloadFactor = enum(u2) {
+        /// On SIO1 = STOP, on SIO0, equivalent to mul1.
+        stop_mul1,
+        mul1,
+        mul16,
+        mul64,
+    };
+    baudrateReloadFactor: BaudrateReloadFactor = .stop_mul1,
     characterLength: u2 = 0b00,
     parityEnable: bool = false,
     parityType: bool = false,
@@ -79,4 +96,55 @@ pub fn SIO_TX_DATA(comptime n: u1) *volatile u8 {
 }
 pub fn SIO_RX_DATA(comptime n: u1) *volatile u8 {
     return SIO_TX_DATA(n);
+}
+
+// // // // // //
+//     GPU     //
+// // // // // //
+
+// 1F801814h - GPU Display Control Commands (GP1)
+// GP1(00h) - Reset GPU
+pub const ResetGpu = packed struct(u32) {
+    _padding: u24 = 0,
+    cmd: u8 = 0x00,
+};
+
+// GP1(01h) - Reset Command Buffer
+pub const ResetCommandBuffer = packed struct(u32) {
+    _padding: u24 = 0,
+    cmd: u8 = 0x01,
+};
+
+// GP1(02h) - Acknowledge GPU Interrupt (IRQ1)
+pub const AcknowledgeGpuInterrupt = packed struct(u32) {
+    _padding: u24 = 0,
+    cmd: u8 = 0x02,
+};
+
+// GP1(03h) - Display Enable
+pub const DisplayEnable = packed struct(u32) {
+    /// NOTE: 0 = On, 1 = Off
+    displayOnOff: u1 = 0,
+    _padding: u23 = 0,
+    cmd: u8 = 0x03,
+};
+
+pub const Gpu1Command = packed union(u32) {
+    resetGpu: ResetGpu,
+    resetCommandBuffer: ResetCommandBuffer,
+    acknowledgeGpuInterrupt: AcknowledgeGpuInterrupt,
+    displayEnable: DisplayEnable,
+};
+
+pub var GPU_GP1: *volatile Gpu1Command = @ptrFromInt(KSEG1 + 0x1f80_1814);
+
+pub fn writeGP1(cmd: anytype) void {
+    const T = @TypeOf(cmd);
+    const active_field_name = comptime block: {
+        for (@typeInfo(Gpu1Command).@"union".fields) |field| {
+            if (field.type == T) break :block field.name;
+        }
+        @compileError(@typeName(T) ++ " is not a valid GPU_GP1 command");
+    };
+    GPU_GP1.* = @unionInit(Gpu1Command, active_field_name, cmd);
 }

@@ -15,17 +15,17 @@ pub fn initSerialIO() void {
     psx.SIO_CTRL(1).reset = true;
 
     psx.SIO_MODE(1).* = .{
-        .baudrateReloadFactor = 1,
-        .characterLength = 3, // 8 data bits
-        .sio1StopBitLength = 1,
+        .baudrate_reload_factor = .mul1,
+        .character_length = 3, // 8 data bits
+        .sio1_stop_bit_length = 1,
     };
 
     psx.SIO_BAUD(1).* = psx.F_CPU / 115200;
 
     psx.SIO_CTRL(1).* = .{
-        .txEnable = true,
-        .rxEnable = true,
-        .sio1RtsOutputLevel = true,
+        .tx_enable = true,
+        .rx_enable = true,
+        .sio1_rts_output_level = true,
     };
 }
 
@@ -36,9 +36,9 @@ pub fn printCharacter(char: u8) void {
     // *not* send any data until it is asserted. To avoid blocking forever if
     // CTS is not asserted, we have to check for it manually and abort if
     // necessary.
-    while (psx.SIO_STAT(1).sio1CtsInputLevel and !psx.SIO_STAT(1).txNotFull) {}
+    while (psx.SIO_STAT(1).sio1_cts_input_level and !psx.SIO_STAT(1).tx_not_full) {}
 
-    if (psx.SIO_STAT(1).sio1CtsInputLevel) {
+    if (psx.SIO_STAT(1).sio1_cts_input_level) {
         psx.SIO_TX_DATA(1).* = char;
     }
 }

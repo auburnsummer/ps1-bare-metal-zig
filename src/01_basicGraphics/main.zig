@@ -20,8 +20,8 @@ export fn _start() noreturn {
     // previous example.
     logging.initSerialIO();
 
-    psx.GPU_GP1.* = .{ .displayEnable = .{ .displayOnOff = 0 } };
-    psx.writeGP1(psx.DisplayEnable{ .displayOnOff = 0 });
+    psx.GPU_GP1.* = .{ .display_enable = .{ .display_on_off = 0 } };
+    psx.writeGP1(psx.DisplayEnable{ .display_on_off = 0 });
 
     while (true) {
         std.log.info("Hello World!", .{});

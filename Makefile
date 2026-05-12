@@ -4,10 +4,12 @@
 
 # you might be wondering, why not cmake?
 # i am scared of cmake
+.PHONY: all
+all: build/00_helloWorld.psexe build/01_basicGraphics.psexe
 
-.DEFAULT_GOAL := build/00_helloWorld.psexe
+.DEFAULT_GOAL := all
 
-build/00_helloWorld.o: src/00_helloWorld/* $(shell find -L src/00_helloWorld/* -type f)
+build/00_helloWorld.o: $(shell find -L src/00_helloWorld/* -type f)
 	zig build-obj \
 		-target mipsel-freestanding \
 		-mcpu mips1 \
@@ -37,10 +39,10 @@ build/01_basicGraphics.elf: build/01_basicGraphics.o
 		-T ./build_helpers/executable.ld \
 		-o build/01_basicGraphics.elf build/01_basicGraphics.o
 
-# This zig build-exe command is THEORETICALLY the same thing
+# This zig build-exe command is THEORETICALLY pretty much the same thing
 # but doesn't work. I'm not sure why.
 
-# build/01_basicGraphics.elf: src/01_basicGraphics/*
+# build/01_basicGraphics.elf: $(shell find -L src/01_basicGraphics/* -type f)
 # 	zig build-exe \
 # 		-target mipsel-freestanding \
 # 		-mcpu mips1 \

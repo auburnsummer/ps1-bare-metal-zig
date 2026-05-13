@@ -15,9 +15,10 @@ build/00_helloWorld.elf: $(shell find -L src/00_helloWorld/* -type f)
 		-mcpu mips1 \
 		-fno-compiler-rt \
 		-fno-ubsan-rt \
-		-fentry=main \
+		--dep main \
+		-Mroot=./src/entry.zig \
+		-Mmain=./src/00_helloWorld/main.zig \
 		--script ./build_helpers/executable.ld \
-		./src/00_helloWorld/main.zig \
 		-femit-bin=build/00_helloWorld.elf
 
 build/00_helloWorld.psexe: build/00_helloWorld.elf
@@ -29,9 +30,12 @@ build/01_basicGraphics.elf: $(shell find -L src/01_basicGraphics/* -type f)
 		-mcpu mips1 \
 		-fno-compiler-rt \
 		-fno-ubsan-rt \
-		-fentry=main \
+		-freference-trace=16 \
+		-fsingle-threaded \
+		--dep main \
+		-Mroot=./src/entry.zig \
+		-Mmain=./src/01_basicGraphics/main.zig \
 		--script ./build_helpers/executable.ld \
-		./src/01_basicGraphics/main.zig \
 		-femit-bin=build/01_basicGraphics.elf
 
 build/01_basicGraphics.psexe: build/01_basicGraphics.elf

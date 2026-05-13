@@ -1,14 +1,6 @@
 const psx = @import("../ps1/registers.zig");
 const std = @import("std");
 
-// Add the necessary memcpy/memset/memmove symbols to the binary which
-// are used by std.fmt.bufPrint.
-// Comptime in this case tells the compiler the import is required
-// for its side effects (i.e. adding the symbols)
-comptime {
-    _ = @import("./mem.zig");
-}
-
 pub fn initSerialIO() void {
     // Reset the serial interface and initialize it to output data at 115200bps,
     // 8 data bits, 1 stop bit and no parity.

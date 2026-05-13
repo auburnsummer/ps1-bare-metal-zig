@@ -54,7 +54,7 @@ fn printCharacter(char: u8) void {
     }
 }
 
-export fn main() noreturn {
+pub fn main() noreturn {
     // Reset the serial interface and initialize it to output data at 115200bps,
     // 8 data bits, 1 stop bit and no parity.
     psx.SIO_CTRL(1).reset = true;

@@ -14,7 +14,12 @@
  * PERFORMANCE OF THIS SOFTWARE.
  */
 
-ENTRY(_start)
+/*
+ * Note: the entry point is omitted here, as it is overridden by the Zig
+ * compiler to whatever is passed in in `-fentry`, or otherwise `__entry`.
+ *
+ * (see lib/std/start.zig and src/link/Lld.zig in the Zig source)
+ */
 
 MEMORY {
 	/*

@@ -14,7 +14,9 @@ pub const std_options: std.Options = .{
     .logFn = logging.logFn,
 };
 
-export fn _start() noreturn {
+var my_cool_global: u32 = 0;
+
+export fn main() noreturn {
     // Initialize the serial interface. The initSerialIO() function is defined
     // in libc/logging.zig and does basically the same things we did in the
     // previous example.
@@ -24,6 +26,7 @@ export fn _start() noreturn {
     psx.writeGP1(psx.DisplayEnable{ .display_on_off = 0 });
 
     while (true) {
-        std.log.info("Hello World!", .{});
+        my_cool_global += 1;
+        std.log.info("Hello World! my_cool_global = {}", .{my_cool_global});
     }
 }

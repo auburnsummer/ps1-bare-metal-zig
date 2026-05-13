@@ -30,8 +30,6 @@ build/01_basicGraphics.elf: $(shell find -L src/01_basicGraphics/* -type f)
 		-mcpu mips1 \
 		-fno-compiler-rt \
 		-fno-ubsan-rt \
-		-freference-trace=16 \
-		-fsingle-threaded \
 		--dep main \
 		-Mroot=./src/entry.zig \
 		-Mmain=./src/01_basicGraphics/main.zig \

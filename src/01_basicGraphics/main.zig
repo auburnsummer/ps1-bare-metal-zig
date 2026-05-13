@@ -8,8 +8,8 @@ pub fn main() noreturn {
     // in libc/logging.zig and does basically the same things we did in the
     // previous example.
     //
-    // Afterwards, we can use `std.log` to print messages to SIO1. This is set up
-    // in entry.zig.
+    // Afterwards, we can use `std.log` to print messages to SIO1. (This is set up
+    // in entry.zig.)
     logging.initSerialIO();
 
     psx.GPU_GP1.* = .{ .display_enable = .{ .display_on_off = 0 } };

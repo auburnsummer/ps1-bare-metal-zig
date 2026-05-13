@@ -4,17 +4,19 @@
 const logging = @import("./libc/logging.zig");
 const std = @import("std");
 
-// Add the necessary memcpy/memset/memmove symbols to the binary which
+// Add memcpy/memset/memmove symbols to the binary which
 // are used by std.fmt.bufPrint.
 // Comptime in this case tells the compiler the import is required
-// for its side effects (i.e. adding the symbols)
+// for its side effects (i.e. adding the symbols).
+// Theoretically we could also add these by using Zig's compiler-rt
+// library, but it doesn't currently support MIPS-I as far as I can tell.
 comptime {
     _ = @import("./libc/mem.zig");
 }
 
 // This sets the log function used by, e.g. std.log to our custom log
 // function which writes to SIO1. The implementation is in libc/logging.zig and
-// is similar to what we did the previous example. `logging.initSerialIO()` must
+// is similar to what we did in 00_helloWorld. `logging.initSerialIO()` must
 // be called before any logging will work.
 //
 // The default log function will attempt to write to stderr, which
@@ -26,8 +28,15 @@ pub const std_options: std.Options = .{
 /// This will be the name of the module to load, which depends on the -Mmain flag passed to zig build-exe.
 const main_module = @import("main");
 
+const bss_start = @extern([*]u8, .{ .name = "_bssStart" });
+const bss_end = @extern([*]u8, .{ .name = "_bssEnd" });
+
 // This is the name of the symbol Zig's linker will look for as the entry point
 // on MIPS architectures. Note the two underscores.
 export fn __start() noreturn {
+    // Zero out the .bss section. Zero-initialised global variables go here.
+    const len = bss_end - bss_start;
+    @memset(bss_start[0..len], 0);
+
     main_module.main();
 }

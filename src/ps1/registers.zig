@@ -11,7 +11,6 @@ const KSEG1: u32 = 0xA000_0000;
 // Serial I/O  //
 // // // // // //
 
-/// 1F80104Ah+N*10h - SIO#_CTRL (R/W)
 pub const SerialIoControl = packed struct(u16) {
     pub const RxInterruptMode = enum(u2) {
         bytes_1,
@@ -19,30 +18,31 @@ pub const SerialIoControl = packed struct(u16) {
         bytes_4,
         bytes_8,
     };
+    pub const Sio0PortSelect = enum(u1) { port_1, port_2 };
     tx_enable: bool = false,
-    dtr_output_level: u1 = 0,
+    dtr_output_on: bool = false,
     rx_enable: bool = false,
-    sio1_tx_output_level: u1 = 0,
+    sio1_tx_inverted: bool = false,
     acknowledge: bool = false,
-    sio1_rts_output_level: u1 = 0,
+    sio1_rts_on: bool = false,
     reset: bool = false,
-    sio1_unknown: bool = false,
+    _sio1_unknown: bool = false,
     rx_interrupt_mode: RxInterruptMode = .bytes_1,
     tx_interrupt_enable: bool = false,
     rx_interrupt_enable: bool = false,
     dsr_interrupt_enable: bool = false,
-    sio0_port_select: bool = false,
+    sio0_port_select: Sio0PortSelect = .port_1,
     _padding: u2 = 0,
 };
 
 // Note on naming conventions: anything that is memory mapped to a hardware register is getting LOUD_YELLING_CASE to match
 // the original C code. This is somewhat against Zig naming convention but I think it's nice to be able to tell at a glance
 // when something is a peripheral.
+/// 1F80104Ah+N*10h - SIO#_CTRL (R/W)
 pub fn SIO_CTRL(comptime n: u1) *volatile SerialIoControl {
     return @ptrFromInt(KSEG1 + 0x1F80_104A + (0x10 * @as(u32, n)));
 }
 
-/// 1F801048h+N*10h - SIO#_MODE (R/W)
 pub const SerialIoMode = packed struct(u16) {
     pub const BaudrateReloadFactor = enum(u2) {
         /// On SIO1 = STOP, on SIO0, equivalent to mul1.
@@ -75,6 +75,7 @@ pub const SerialIoMode = packed struct(u16) {
     sio0_clock_polarity: bool = false,
     _padding: u7 = 0,
 };
+/// 1F801048h+N*10h - SIO#_MODE (R/W)
 pub fn SIO_MODE(comptime n: u1) *volatile SerialIoMode {
     return @ptrFromInt((KSEG1 + 0x1F80_1048) + (0x10 * @as(u32, n)));
 }
@@ -84,32 +85,32 @@ pub fn SIO_BAUD(comptime n: u1) *volatile u16 {
     return @ptrFromInt((KSEG1 + 0x1F80_104E) + (0x10 * @as(u32, n)));
 }
 
-/// 1F801044h+N*10h - SIO#_STAT (R)
 pub const SerialIoStat = packed struct(u32) {
-    tx_not_full: bool = false,
-    rx_not_empty: bool = false,
+    tx_ready: bool = false,
+    rx_data_available: bool = false,
     tx_idle: bool = false,
     rx_parity_error: bool = false,
     sio1_rx_fifo_overrun: bool = false,
     sio1_rx_bad_stop_bit: bool = false,
-    sio1_rx_input_level: bool = false,
-    dsr_input_level: bool = false,
-    sio1_cts_input_level: bool = false,
-    interrupt_request: bool = false,
+    sio1_rx_inverted: bool = false,
+    dsr_on: bool = false,
+    sio1_cts_on: bool = false,
+    interrupt: bool = false,
     unknown: bool = false,
     baudrate_timer: u21 = 0,
 };
-
+/// 1F801044h+N*10h - SIO#_STAT (R)
 pub fn SIO_STAT(comptime n: u1) *volatile SerialIoStat {
     return @ptrFromInt((KSEG1 + 0x1F80_1044) + (0x10 * @as(u32, n)));
 }
 
 /// 1F801040h+N*10h - SIO#_TX_DATA (W)
-/// 1F801040h+N*10h - SIO#_RX_DATA (R)
-/// This is the same register.
+/// Same address as SIO#_RX_DATA (R)
 pub fn SIO_TX_DATA(comptime n: u1) *volatile u8 {
     return @ptrFromInt((KSEG1 + 0x1F80_1040) + (0x10 * @as(u32, n)));
 }
+/// 1F801040h+N*10h - SIO#_RX_DATA (R)
+/// Same address as SIO#_TX_DATA (W)
 pub fn SIO_RX_DATA(comptime n: u1) *volatile u8 {
     return SIO_TX_DATA(n);
 }
@@ -118,7 +119,12 @@ pub fn SIO_RX_DATA(comptime n: u1) *volatile u8 {
 //     GPU     //
 // // // // // //
 
-// 1F801814h - GPU Display Control Commands (GP1)
+/// 0 = on, 1 = off
+pub const DisplayStatus = enum(u1) {
+    on,
+    off,
+};
+
 // GP1(00h) - Reset GPU
 pub const ResetGpu = packed struct(u32) {
     _padding: u24 = 0,
@@ -140,7 +146,7 @@ pub const AcknowledgeGpuInterrupt = packed struct(u32) {
 // GP1(03h) - Display Enable
 pub const DisplayEnable = packed struct(u32) {
     /// NOTE: 0 = On, 1 = Off
-    display_on_off: u1 = 0,
+    display: DisplayStatus = .on,
     _padding: u23 = 0,
     _cmd: u8 = 0x03,
 };
@@ -152,10 +158,14 @@ pub const Gpu1Command = packed union(u32) {
     c_03: DisplayEnable,
 };
 
+/// 1F801814h - GPU Display Control Commands (GP1)
 pub var GPU_GP1: *volatile Gpu1Command = @ptrFromInt(KSEG1 + 0x1f80_1814);
 
+/// Write a command to the GPU_GP1 register.
+/// The command must be defined in the `Gpu1Command` union.
 pub fn writeGP1(cmd: anytype) void {
     const T = @TypeOf(cmd);
+    // comptime nonsense to confirm the command is valid.
     const active_field_name = comptime block: {
         for (@typeInfo(Gpu1Command).@"union".fields) |field| {
             if (field.type == T) break :block field.name;
@@ -165,19 +175,6 @@ pub fn writeGP1(cmd: anytype) void {
     GPU_GP1.* = @unionInit(Gpu1Command, active_field_name, cmd);
 }
 
-// 1F801814h - GPUSTAT - GPU Status Register (R)
-// Similar to SIO_TX_DATA / SIO_RX_DATA, this is the read version of the same register as GPU_GP1.
-//   24    Interrupt Request (IRQ1)    (0=Off, 1=IRQ)       ;GP0(1Fh)/GP1(02h)
-//   25    DMA / Data Request, meaning depends on GP1(04h) DMA Direction:
-//           When GP1(04h)=0 ---> Always zero (0)
-//           When GP1(04h)=1 ---> FIFO State  (0=Full, 1=Not Full)
-//           When GP1(04h)=2 ---> Same as GPUSTAT.28
-//           When GP1(04h)=3 ---> Same as GPUSTAT.27
-//   26    Ready to receive Cmd Word   (0=No, 1=Ready)  ;GP0(...) ;via GP0
-//   27    Ready to send VRAM to CPU   (0=No, 1=Ready)  ;GP0(C0h) ;via GPUREAD
-//   28    Ready to receive DMA Block  (0=No, 1=Ready)  ;GP0(...) ;via GP0
-//   29-30 DMA Direction (0=Off, 1=?, 2=CPUtoGP0, 3=GPUREADtoCPU)    ;GP1(04h).0-1
-//   31    Drawing even/odd lines in interlace mode (0=Even or Vblank, 1=Odd)
 pub const GpuStat = packed struct(u32) {
     pub const SemiTransparency = enum(u2) {
         avg,
@@ -191,7 +188,7 @@ pub const GpuStat = packed struct(u32) {
         bits_15,
         _reserved,
     };
-    pub const DrawPixels = enum(u2) {
+    pub const DrawPixels = enum(u1) {
         always,
         not_to_masked_areas,
     };
@@ -220,15 +217,15 @@ pub const GpuStat = packed struct(u32) {
         cpu_to_gp0,
         gpu_to_cpu,
     };
-    texture_page_x_base: u3 = 0,
+    texture_page_x_base: u4 = 0,
     texture_page_y_base_1: u1 = 0,
     semi_transparency: SemiTransparency = .avg,
     texture_page_colors: TexturePageColors = .bits_4,
     dither: bool = false,
-    drawing_to_display_area_ok: bool = false,
+    draw_to_display_area_allowed: bool = false,
     set_mask_bit_when_drawing_pixels: bool = false,
     draw_pixels: DrawPixels = .always,
-    interlace: bool = false,
+    interlace_field: bool = false,
     flip_horizontal: bool = false,
     texture_page_y_base_2: u1 = 0,
     horizontal_resolution: HorizontalResolution = .res_256,
@@ -236,12 +233,14 @@ pub const GpuStat = packed struct(u32) {
     video_mode: VideoMode = .ntsc,
     display_area_color_depth: ColorDepth = .bits_15,
     vertical_interlace: bool = false,
-    display_on_off: bool = false,
-    interrupt_request: bool = false,
-    dma: u2 = 0b00,
+    display: DisplayStatus = .on,
+    interrupt: bool = false,
+    dma: bool = false,
     ready_receive_cmd: bool = false,
     ready_send_vram: bool = false,
     ready_receive_dma_block: bool = false,
     dma_direction: DmaDirection = .off,
-    draw_even_odd: u0 = 0,
+    draw_even_odd: u1 = 0,
 };
+/// 1F801814h - GPUSTAT - GPU Status Register (R)
+pub var GPU_STAT: *volatile GpuStat = @ptrFromInt(KSEG1 + 0x1f80_1814);

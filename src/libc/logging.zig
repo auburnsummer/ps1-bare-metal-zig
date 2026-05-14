@@ -2,8 +2,6 @@ const psx = @import("../ps1/registers.zig");
 const std = @import("std");
 
 pub fn initSerialIO() void {
-    // Reset the serial interface and initialize it to output data at 115200bps,
-    // 8 data bits, 1 stop bit and no parity.
     psx.SIO_CTRL(1).reset = true;
 
     psx.SIO_MODE(1).* = .{
@@ -17,7 +15,7 @@ pub fn initSerialIO() void {
     psx.SIO_CTRL(1).* = .{
         .tx_enable = true,
         .rx_enable = true,
-        .sio1_rts_output_level = 1,
+        .sio1_rts_on = true,
     };
 }
 
@@ -28,9 +26,9 @@ pub fn printCharacter(char: u8) void {
     // *not* send any data until it is asserted. To avoid blocking forever if
     // CTS is not asserted, we have to check for it manually and abort if
     // necessary.
-    while (psx.SIO_STAT(1).sio1_cts_input_level and !psx.SIO_STAT(1).tx_not_full) {}
+    while (psx.SIO_STAT(1).sio1_cts_on and !psx.SIO_STAT(1).tx_ready) {}
 
-    if (psx.SIO_STAT(1).sio1_cts_input_level) {
+    if (psx.SIO_STAT(1).sio1_cts_on) {
         psx.SIO_TX_DATA(1).* = char;
     }
 }

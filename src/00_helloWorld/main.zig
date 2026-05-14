@@ -45,32 +45,39 @@ fn printCharacter(char: u8) void {
     // it to the data register.
     // NOTE: the serial interface checks for an external signal (CTS) and will
     // *not* send any data until it is asserted. To avoid blocking forever if
-    // CTS is not asserted, we have to check for it manually and abort if
-    // necessary.
-    while (psx.SIO_STAT(1).sio1_cts_input_level and !psx.SIO_STAT(1).tx_not_full) {}
+    // CTS is not asserted, we check for it manually and exit this function
+    // without doing anything.
+    while (psx.SIO_STAT(1).sio1_cts_on and !psx.SIO_STAT(1).tx_ready) {}
 
-    if (psx.SIO_STAT(1).sio1_cts_input_level) {
+    if (psx.SIO_STAT(1).sio1_cts_on) {
         psx.SIO_TX_DATA(1).* = char;
     }
 }
 
 pub fn main() noreturn {
-    // Reset the serial interface and initialize it to output data at 115200bps,
-    // 8 data bits, 1 stop bit and no parity.
+    // Reset the serial interface...
     psx.SIO_CTRL(1).reset = true;
 
+    // ...and initialize it to output data with
+    // 8 data bits, 1 stop bit and no parity...
     psx.SIO_MODE(1).* = .{
         .baud = .mul1,
         .char_length = .bits_8,
         .sio1_stop_bit_length = .bits_1,
     };
 
+    // ...at 115200bps.
     psx.SIO_BAUD(1).* = psx.F_CPU / 115200;
 
+    // Turn SIO1 on.
+    // By the way, if you're confused about what these registers are,
+    // each register is commented with its address in the PS1. You can
+    // look them up at https://psx-spx.consoledev.net/ which gives a
+    // description of each bit.
     psx.SIO_CTRL(1).* = .{
         .tx_enable = true,
         .rx_enable = true,
-        .sio1_rts_output_level = 1,
+        .sio1_rts_on = true,
     };
 
     // Output "Hello world!" in a loop, one character at a time.

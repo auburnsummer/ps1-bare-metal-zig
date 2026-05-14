@@ -8,7 +8,7 @@ const std = @import("std");
 // are used by std.fmt.bufPrint.
 // Comptime in this case tells the compiler the import is required
 // for its side effects (i.e. adding the symbols).
-// Theoretically we could also add these by using Zig's compiler-rt
+// Theoretically we could also get these by including Zig's compiler-rt
 // library, but it doesn't currently support MIPS-I as far as I can tell.
 comptime {
     _ = @import("./libc/mem.zig");

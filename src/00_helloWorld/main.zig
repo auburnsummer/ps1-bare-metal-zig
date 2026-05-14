@@ -60,9 +60,9 @@ pub fn main() noreturn {
     psx.SIO_CTRL(1).reset = true;
 
     psx.SIO_MODE(1).* = .{
-        .baudrate_reload_factor = .mul1,
-        .character_length = 3, // 8 data bits
-        .sio1_stop_bit_length = 1,
+        .baud = .mul1,
+        .char_length = .bits_8,
+        .sio1_stop_bit_length = .bits_1,
     };
 
     psx.SIO_BAUD(1).* = psx.F_CPU / 115200;
@@ -70,7 +70,7 @@ pub fn main() noreturn {
     psx.SIO_CTRL(1).* = .{
         .tx_enable = true,
         .rx_enable = true,
-        .sio1_rts_output_level = true,
+        .sio1_rts_output_level = 1,
     };
 
     // Output "Hello world!" in a loop, one character at a time.
@@ -83,6 +83,6 @@ pub fn main() noreturn {
     }
 
     // We're not actually going to return. Unless a loader was used to launch
-    // the program, returning from _start() would crash the console as there would
+    // the program, returning from __start() would crash the console as there would
     // be nothing to return to.
 }

@@ -14,13 +14,10 @@ pub fn main() noreturn {
     // Read the GPU's status register to check if it was left in PAL or NTSC
     // mode by the BIOS/loader.
     if (psx.GPU_STAT.video_mode == .pal) {
-        std.log.info("PAL", .{});
+        std.log.info("Using PAL mode", .{});
     } else {
-        std.log.info("NTSC", .{});
+        std.log.info("Using NTSC mode", .{});
     }
-
-    psx.GPU_GP1.* = .{ .c_03 = .{ .display = .off } };
-    psx.writeGP1(psx.DisplayEnable{ .display = .off });
 
     while (true) {}
 }

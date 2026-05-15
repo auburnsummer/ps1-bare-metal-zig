@@ -119,61 +119,142 @@ pub fn SIO_RX_DATA(comptime n: u1) *volatile u8 {
 //     GPU     //
 // // // // // //
 
-/// 0 = on, 1 = off
-pub const DisplayStatus = enum(u1) {
-    on,
+pub const VideoMode = enum(u1) {
+    ntsc,
+    pal,
+};
+
+pub const DmaRequestMode = enum(u2) {
     off,
+    fifo,
+    cpu_to_gp0,
+    gpu_to_cpu,
 };
 
-// GP1(00h) - Reset GPU
-pub const ResetGpu = packed struct(u32) {
-    _padding: u24 = 0,
-    _cmd: u8 = 0x00,
+const _HorizontalResolutionLayout = packed struct(u3) { h_res_1: u2, h_res_2: u1 };
+
+/// Horizontal Resolution as laid out in the GPUSTAT register,
+/// bit 0: 1 if 368
+/// bits 1-2: 256/320/512/640
+pub const HorizontalResolution = enum(u3) {
+    res_256 = 0b000,
+    res_368 = 0b001,
+    res_320 = 0b010,
+    res_512 = 0b100,
+    res_640 = 0b110,
 };
 
-// GP1(01h) - Reset Command Buffer
-pub const ResetCommandBuffer = packed struct(u32) {
-    _padding: u24 = 0,
-    _cmd: u8 = 0x01,
+pub const VerticalResolution = enum(u1) {
+    res_240,
+    res_480,
 };
 
-// GP1(02h) - Acknowledge GPU Interrupt (IRQ1)
-pub const AcknowledgeGpuInterrupt = packed struct(u32) {
-    _padding: u24 = 0,
-    _cmd: u8 = 0x02,
+pub const ColorDepth = enum(u1) {
+    bits_15,
+    bits_24,
 };
 
-// GP1(03h) - Display Enable
-pub const DisplayEnable = packed struct(u32) {
-    /// NOTE: 0 = On, 1 = Off
-    display: DisplayStatus = .on,
-    _padding: u23 = 0,
-    _cmd: u8 = 0x03,
-};
+/// GP1(00h) - Reset GPU
+pub fn gp1ResetGpu() u32 {
+    const Cmd = packed struct(u32) {
+        _padding: u24 = 0,
+        _cmd: u8 = 0x00,
+    };
+    return @bitCast(Cmd{});
+}
 
-pub const Gpu1Command = packed union(u32) {
-    c_00: ResetGpu,
-    c_01: ResetCommandBuffer,
-    c_02: AcknowledgeGpuInterrupt,
-    c_03: DisplayEnable,
-};
+/// GP1(01h) - Reset Command Buffer
+pub fn gp1ResetFifo() u32 {
+    const Cmd = packed struct(u32) {
+        _padding: u24 = 0,
+        _cmd: u8 = 0x01,
+    };
+    return @bitCast(Cmd{});
+}
+
+/// GP1(02h) - Acknowledge GPU Interrupt (IRQ1)
+pub fn gp1Acknowledge() u32 {
+    const Cmd = packed struct(u32) {
+        _padding: u24 = 0,
+        _cmd: u8 = 0x02,
+    };
+    return @bitCast(Cmd{});
+}
+
+/// GP1(03h) - Display Enable
+pub fn gp1Blank(blank: bool) u32 {
+    const Cmd = packed struct(u32) {
+        blank: bool,
+        _padding: u23 = 0,
+        _cmd: u8 = 0x03,
+    };
+    return @bitCast(Cmd{ .blank = blank });
+}
+
+/// GP1(04h) - DMA Direction / Data Request
+pub fn gp1DmaRequestMode(mode: DmaRequestMode) u32 {
+    const Cmd = packed struct(u32) {
+        mode: DmaRequestMode,
+        _padding: u22 = 0,
+        _cmd: u8 = 0x04,
+    };
+    return @bitCast(Cmd{ .mode = mode });
+}
+
+/// GP1(05h) - Start of Display Area (in VRAM)
+pub fn gp1FbOffset(x: u10, y: u9) u32 {
+    const Cmd = packed struct(u32) {
+        x: u10,
+        y: u9,
+        _padding: u5 = 0,
+        _cmd: u8 = 0x05,
+    };
+    return @bitCast(Cmd{ .x = x, .y = y });
+}
+
+pub fn gp1FbRangeH(low: u12, high: u12) u32 {
+    const Cmd = packed struct(u32) {
+        low: u12,
+        high: u12,
+        _cmd: u8 = 0x06,
+    };
+    return @bitCast(Cmd{ .low = low, .high = high });
+}
+
+pub fn gp1FbRangeV(low: u10, high: u10) u32 {
+    const Cmd = packed struct(u32) {
+        low: u10,
+        high: u10,
+        _cmd: u8 = 0x07,
+    };
+    return @bitCast(Cmd{ .low = low, .high = high });
+}
+
+pub fn gp1FbMode(h_res: HorizontalResolution, v_res: VerticalResolution, mode: VideoMode, interlace: bool, color_depth: ColorDepth) u32 {
+    const Cmd = packed struct(u32) {
+        h_res_1: u2,
+        v_res: VerticalResolution,
+        video_mode: VideoMode,
+        color_depth: ColorDepth,
+        interlace: bool,
+        h_res_2: u1,
+        flip_h: bool = false,
+        _padding: u16 = 0,
+        _cmd: u8 = 0x08,
+    };
+    return @bitCast(Cmd{
+        .h_res_1 = (h_res & 0b110) >> 1,
+        .v_res = v_res,
+        .video_mode = mode,
+        .color_depth = color_depth,
+        .interlace = interlace,
+        .h_res_2 = h_res & 0b001,
+    });
+}
 
 /// 1F801814h - GPU Display Control Commands (GP1)
-pub var GPU_GP1: *volatile Gpu1Command = @ptrFromInt(KSEG1 + 0x1f80_1814);
-
-/// Write a command to the GPU_GP1 register.
-/// The command must be defined in the `Gpu1Command` union.
-pub fn writeGP1(cmd: anytype) void {
-    const T = @TypeOf(cmd);
-    // comptime nonsense to confirm the command is valid.
-    const active_field_name = comptime block: {
-        for (@typeInfo(Gpu1Command).@"union".fields) |field| {
-            if (field.type == T) break :block field.name;
-        }
-        @compileError(@typeName(T) ++ " is not a valid GPU_GP1 command");
-    };
-    GPU_GP1.* = @unionInit(Gpu1Command, active_field_name, cmd);
-}
+/// https://psx-spx.consoledev.net/graphicsprocessingunitgpu/#gpu-display-control-commands-gp1
+pub var GPU_GP1: *volatile u32 = @ptrFromInt(KSEG1 + 0x1f80_1814);
 
 pub const GpuStat = packed struct(u32) {
     pub const SemiTransparency = enum(u2) {
@@ -192,48 +273,29 @@ pub const GpuStat = packed struct(u32) {
         always,
         not_to_masked_areas,
     };
-    pub const HorizontalResolution = enum(u3) {
-        res_256 = 0b000,
-        res_368 = 0b001,
-        res_320 = 0b010,
-        res_512 = 0b100,
-        res_640 = 0b110,
-    };
-    pub const VerticalResolution = enum(u1) {
-        res_240 = 0,
-        res_480 = 1,
-    };
-    pub const VideoMode = enum(u1) {
-        ntsc,
-        pal,
-    };
-    pub const ColorDepth = enum(u1) {
-        bits_15,
-        bits_24,
-    };
     pub const DmaDirection = enum(u2) {
         off,
         _unknown,
         cpu_to_gp0,
         gpu_to_cpu,
     };
-    texture_page_x_base: u4 = 0,
-    texture_page_y_base_1: u1 = 0,
-    semi_transparency: SemiTransparency = .avg,
-    texture_page_colors: TexturePageColors = .bits_4,
+    texpage_x_base: u4 = 0,
+    texpage_y_base_1: u1 = 0,
+    transparency: SemiTransparency = .avg,
+    texpage_colors: TexturePageColors = .bits_4,
     dither: bool = false,
     draw_to_display_area_allowed: bool = false,
     set_mask_bit_when_drawing_pixels: bool = false,
     draw_pixels: DrawPixels = .always,
     interlace_field: bool = false,
-    flip_horizontal: bool = false,
+    flip_h: bool = false,
     texture_page_y_base_2: u1 = 0,
-    horizontal_resolution: HorizontalResolution = .res_256,
-    vertical_resolution: VerticalResolution = .res_240,
+    h_res: HorizontalResolution = .res_256,
+    v_res: VerticalResolution = .res_240,
     video_mode: VideoMode = .ntsc,
-    display_area_color_depth: ColorDepth = .bits_15,
-    vertical_interlace: bool = false,
-    display: DisplayStatus = .on,
+    color_depth: ColorDepth = .bits_15,
+    v_interlace: bool = false,
+    blank: bool = false,
     interrupt: bool = false,
     dma: bool = false,
     ready_receive_cmd: bool = false,

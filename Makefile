@@ -13,6 +13,7 @@ build/00_helloWorld.elf: $(shell find -L src/00_helloWorld/* -type f)
 	zig build-exe \
 		-target mipsel-freestanding \
 		-mcpu mips1 \
+		-OReleaseFast \
 		-fno-compiler-rt \
 		-fno-ubsan-rt \
 		--dep main \
@@ -28,6 +29,7 @@ build/01_basicGraphics.elf: $(shell find -L src/01_basicGraphics/* -type f)
 	zig build-exe \
 		-target mipsel-freestanding \
 		-mcpu mips1 \
+		-OReleaseFast \
 		-fno-compiler-rt \
 		-fno-ubsan-rt \
 		--dep main \

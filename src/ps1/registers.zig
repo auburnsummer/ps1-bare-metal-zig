@@ -131,8 +131,6 @@ pub const DmaRequestMode = enum(u2) {
     gpu_to_cpu,
 };
 
-const _HorizontalResolutionLayout = packed struct(u3) { h_res_1: u2, h_res_2: u1 };
-
 /// Horizontal Resolution as laid out in the GPUSTAT register,
 /// bit 0: 1 if 368
 /// bits 1-2: 256/320/512/640
@@ -225,6 +223,7 @@ pub fn gp1FbRangeV(low: u10, high: u10) u32 {
     const Cmd = packed struct(u32) {
         low: u10,
         high: u10,
+        _padding: u4 = 0,
         _cmd: u8 = 0x07,
     };
     return @bitCast(Cmd{ .low = low, .high = high });
@@ -242,14 +241,32 @@ pub fn gp1FbMode(h_res: HorizontalResolution, v_res: VerticalResolution, mode: V
         _padding: u16 = 0,
         _cmd: u8 = 0x08,
     };
+    const h = @intFromEnum(h_res);
     return @bitCast(Cmd{
-        .h_res_1 = (h_res & 0b110) >> 1,
+        .h_res_1 = @truncate(h >> 1),
         .v_res = v_res,
         .video_mode = mode,
         .color_depth = color_depth,
         .interlace = interlace,
-        .h_res_2 = h_res & 0b001,
+        .h_res_2 = @truncate(h & 0b001),
     });
+}
+
+pub fn getGpuClockMultiplerH(h_res: HorizontalResolution) u32 {
+    return switch (h_res) {
+        .res_256 => 10,
+        .res_320 => 8,
+        .res_368 => 7,
+        .res_512 => 5,
+        .res_640 => 4,
+    };
+}
+
+pub fn getGpuClockMultipleV(v_res: VerticalResolution) u32 {
+    return switch (v_res) {
+        .res_240 => 1,
+        .res_480 => 2,
+    };
 }
 
 /// 1F801814h - GPU Display Control Commands (GP1)

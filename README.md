@@ -18,8 +18,15 @@ When you try to compile Zig for MIPS-I, it has a warning `MIPS-I support is expe
 
 I have decided to naively ignore this. This is almost certainly going to
 bite me once I work further through the ps1-bare-metal examples and run
-into something that isn't supported properly yet (...likely the GTE stuff but we'll see)
+into something that isn't supported properly yet (...maybe the GTE stuff but we'll see)
 
 
 [1]: https://github.com/spicyjpeg/ps1-bare-metal
 
+### Zig with MIPS-I notes
+
+ - pass `no-compiler-rt` flag when compiling. otherwise it tries to emit a SYNC
+   instruction which doesn't exist in MIPS-I when compiling atomics.zig in compiler-rt
+ - pass `-OReleaseFast` when compiling, the division safety check Zig emits uses
+   `teq` instruction which doesn't exist in MIPS-I
+- `zig objdump` doesn't work for ELF files yet, but you can use `mipsel-none-elf-objdump` instead

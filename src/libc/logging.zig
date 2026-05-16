@@ -51,10 +51,12 @@ pub fn logFn(
 
     var buffer: [MAXIMUM_LOG_SIZE]u8 = undefined;
 
+    printString("just after buffer");
     const message = std.fmt.bufPrint(buffer[0..], format ++ "\n", args);
     if (message) |slice| {
         printString(slice);
     } else |_| {
         printString("oh no");
     }
+    // ...to this line.
 }

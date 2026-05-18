@@ -6,7 +6,6 @@ pub fn setupGPU(mode: psx.VideoMode, width: u32, height: u32) void {
     // Set the origin of the displayed framebuffer. These "magic" values,
     // derived from the GPU's internal clocks, will center the picture on most
     // displays and upscalers.
-    std.log.info("aa", .{});
     const x: u32 = 0x760;
     const y: u32 = if (mode == .pal) 0xa3 else 0x88;
 
@@ -62,6 +61,28 @@ pub fn main() noreturn {
         std.log.info("Using NTSC mode", .{});
         setupGPU(.ntsc, screen_width, screen_height);
     }
+
+    // Wait for the GPU to become ready, then send some GP0 commands to tell it
+    // which area of the framebuffer we want to draw to and enable dithering.
+    psx.waitForGp0Ready();
+    psx.GPU_GP0.* = psx.gp0drawMode(.{}, true, false);
+    psx.GPU_GP0.* = psx.gp0FbOffset1(0, 0);
+    psx.GPU_GP0.* = psx.gp0FbOffset2(screen_width - 1, screen_height - 1);
+    psx.GPU_GP0.* = psx.gp0FbOrigin(0, 0);
+
+    // Send a VRAM fill command to quickly fill our area with a dark greenish blue. Note
+    // that the coordinates passed to this specific command are *not* relative
+    // to the ones we've just sent to the GPU!
+    psx.waitForGp0Ready();
+    psx.GPU_GP0.* = psx.gp0VramFill(.{ .r = 32, .g = 76, .b = 79 });
+    psx.GPU_GP0.* = psx.gp0XY(0, 0);
+    psx.GPU_GP0.* = psx.gp0WidthHeight(screen_width, screen_height);
+
+    // Send two GP1 commands to set the origin of the area we want to display
+    // and switch on the display output.
+    psx.waitForGp0Ready();
+    psx.GPU_GP1.* = psx.gp1FbOffset(0, 0);
+    psx.GPU_GP1.* = psx.gp1Blank(false);
 
     while (true) {
         std.log.info("hello", .{});

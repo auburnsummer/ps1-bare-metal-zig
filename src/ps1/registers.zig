@@ -273,19 +273,21 @@ pub fn getGpuClockMultipleV(v_res: VerticalResolution) u32 {
 /// https://psx-spx.consoledev.net/graphicsprocessingunitgpu/#gpu-display-control-commands-gp1
 pub var GPU_GP1: *volatile u32 = @ptrFromInt(KSEG1 + 0x1f80_1814);
 
+pub const SemiTransparency = enum(u2) {
+    avg,
+    add,
+    subtract,
+    add_quarter,
+};
+
+pub const TexpageColors = enum(u2) {
+    bits_4,
+    bits_8,
+    bits_15,
+    _reserved,
+};
+
 pub const GpuStat = packed struct(u32) {
-    pub const SemiTransparency = enum(u2) {
-        avg,
-        add,
-        subtract,
-        add_quarter,
-    };
-    pub const TexturePageColors = enum(u2) {
-        bits_4,
-        bits_8,
-        bits_15,
-        _reserved,
-    };
     pub const DrawPixels = enum(u1) {
         always,
         not_to_masked_areas,
@@ -299,9 +301,9 @@ pub const GpuStat = packed struct(u32) {
     texpage_x_base: u4 = 0,
     texpage_y_base_1: u1 = 0,
     transparency: SemiTransparency = .avg,
-    texpage_colors: TexturePageColors = .bits_4,
+    texpage_colors: TexpageColors = .bits_4,
     dither: bool = false,
-    draw_to_display_area_allowed: bool = false,
+    unlock_fb: bool = false,
     set_mask_bit_when_drawing_pixels: bool = false,
     draw_pixels: DrawPixels = .always,
     interlace_field: bool = false,
@@ -323,3 +325,99 @@ pub const GpuStat = packed struct(u32) {
 };
 /// 1F801814h - GPUSTAT - GPU Status Register (R)
 pub var GPU_STAT: *volatile GpuStat = @ptrFromInt(KSEG1 + 0x1f80_1814);
+
+pub fn waitForGp0Ready() void {
+    while (!GPU_STAT.ready_receive_cmd) {}
+}
+
+pub const TexpageAttribute = packed struct(u12) {
+    x_base: u4 = 0,
+    y_base_1: u1 = 0,
+    transparency: SemiTransparency = .avg,
+    colors: TexpageColors = .bits_4,
+    _padding: u2 = 0,
+    y_base_2: u1 = 0,
+};
+
+/// 1F801810h-Write GP0 -- Send GP0 Commands/Packets (Rendering and VRAM Access)
+pub var GPU_GP0: *volatile u32 = @ptrFromInt(KSEG1 + 0x1F80_1810);
+
+/// GP0(E1h) - Draw Mode setting (aka "Texpage")
+pub fn gp0drawMode(page: TexpageAttribute, dither: bool, unlock_fb: bool) u32 {
+    // The idea here is to create two overlapping structs and then bitwise OR them
+    const TexturePagePart = packed struct(u32) {
+        page: TexpageAttribute,
+        _padding: u20 = 0,
+    };
+    const Rest = packed struct(u32) {
+        // covered by TexturePage
+        _padding: u9 = 0,
+        // bits 9 and 10, not covered
+        dither: bool,
+        unlock_fb: bool,
+        // bits 11-23
+        _padding_2: u13 = 0,
+        // cmd
+        _cmd: u8 = 0xe1,
+    };
+    const a: u32 = @bitCast(TexturePagePart{ .page = page });
+    const b: u32 = @bitCast(Rest{ .dither = dither, .unlock_fb = unlock_fb });
+    return a | b;
+}
+
+const FbOffsetCmd = packed struct(u32) {
+    x: u10,
+    y: u9,
+    _padding: u5 = 0,
+    cmd: u8,
+};
+
+/// GP0(E3h) - Set Drawing Area top left (X1,Y1)
+pub fn gp0FbOffset1(x: u10, y: u9) u32 {
+    return @bitCast(FbOffsetCmd{ .x = x, .y = y, .cmd = 0xe3 });
+}
+
+/// GP0(E4h) - Set Drawing Area bottom right (X2,Y2)
+pub fn gp0FbOffset2(x: u10, y: u9) u32 {
+    return @bitCast(FbOffsetCmd{ .x = x, .y = y, .cmd = 0xe4 });
+}
+
+/// GP0(E5h) - Set Drawing Offset (X,Y)
+pub fn gp0FbOrigin(x: i11, y: i11) u32 {
+    const Cmd = packed struct(u32) {
+        x: i11,
+        y: i11,
+        _padding: u2 = 0,
+        _cmd: u8 = 0xe5,
+    };
+    return @bitCast(Cmd{ .x = x, .y = y });
+}
+
+const RgbColor = packed struct(u24) {
+    r: u8,
+    g: u8,
+    b: u8,
+};
+
+/// 02h - Quick Rectangle Fill
+pub fn gp0VramFill(color: RgbColor) u32 {
+    const Cmd = packed struct(u32) {
+        color: RgbColor,
+        _cmd: u8 = 0x02,
+    };
+    return @bitCast(Cmd{ .color = color });
+}
+
+/// Argument given to commands.
+pub fn gp0XY(x: u16, y: u16) u32 {
+    const Cmd = packed struct(u32) {
+        x: u16,
+        y: u16,
+    };
+    return @bitCast(Cmd{ .x = x, .y = y });
+}
+
+/// Bitwise the same as gp0XY, just for semantic reasons.
+pub fn gp0WidthHeight(width: u16, height: u16) u32 {
+    return gp0XY(width, height);
+}

@@ -29,4 +29,6 @@ into something that isn't supported properly yet (...maybe the GTE stuff but we'
    instruction which doesn't exist in MIPS-I when compiling atomics.zig in compiler-rt
  - pass `-OReleaseFast` when compiling, the division safety check Zig emits uses
    `teq` instruction which doesn't exist in MIPS-I
-- `zig objdump` doesn't work for ELF files yet, but you can use `mipsel-none-elf-objdump` instead
+- `zig objdump` doesn't work for ELF files yet, but you can use `mipsel-none-elf-objdump` instead, e.g.
+
+   `mipsel-none-elf-objdump -d -S -M no-aliases <elf file>`

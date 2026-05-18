@@ -417,7 +417,47 @@ pub fn gp0XY(x: u16, y: u16) u32 {
     return @bitCast(Cmd{ .x = x, .y = y });
 }
 
+/// Argument version of RGB
+pub fn gp0Rgb(color: RgbColor) u32 {
+    const Cmd = packed struct(u32) {
+        color: RgbColor,
+        _cmd: u8 = 0,
+    };
+    return @bitCast(Cmd{ .color = color });
+}
+
 /// Bitwise the same as gp0XY, just for semantic reasons.
 pub fn gp0WidthHeight(width: u16, height: u16) u32 {
     return gp0XY(width, height);
+}
+
+pub fn gp0Polygon(
+    color: RgbColor,
+    unshaded: bool,
+    blend: bool,
+    textured: bool,
+    quad: bool,
+    gourand: bool,
+) u32 {
+    const Cmd = packed struct(u32) {
+        color: RgbColor,
+        unshaded: bool,
+        blend: bool,
+        textured: bool,
+        quad: bool,
+        gourand: bool,
+        _cmd: u3 = 0b001,
+    };
+    return @bitCast(Cmd{
+        .color = color,
+        .unshaded = unshaded,
+        .blend = blend,
+        .textured = textured,
+        .quad = quad,
+        .gourand = gourand,
+    });
+}
+
+pub fn gp0ShadedTriangle(color: RgbColor, gourand: bool, textured: bool, blend: bool) u32 {
+    return gp0Polygon(color, false, blend, textured, false, gourand);
 }

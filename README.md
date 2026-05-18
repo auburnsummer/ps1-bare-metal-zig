@@ -9,8 +9,7 @@ using Zig instead.
 This is mostly an educational project for myself, however, I hope that it
 might be a little bit useful if anyone else ends up searching for something similar.
 
-So far I have managed to get SERIAL WORKING woohoo! nothing on the screen yet
-though.
+So far I have managed to get SERIAL WORKING and ONE TRIANGLE ON SCREEN woohoo!
 
 ## BIG DISCLAIMER
 

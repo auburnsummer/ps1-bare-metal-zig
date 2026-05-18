@@ -78,6 +78,16 @@ pub fn main() noreturn {
     psx.GPU_GP0.* = psx.gp0XY(0, 0);
     psx.GPU_GP0.* = psx.gp0WidthHeight(screen_width, screen_height);
 
+    // Tell the GPU to draw a Gouraud shaded triangle whose vertices are red,
+    // green and blue respectively at the center of our drawing area.
+    psx.waitForGp0Ready();
+    psx.GPU_GP0.* = psx.gp0ShadedTriangle(.{ .r = 255, .g = 0, .b = 0 }, true, false, false);
+    psx.GPU_GP0.* = psx.gp0XY(screen_width / 2, 32);
+    psx.GPU_GP0.* = psx.gp0Rgb(.{ .r = 0, .g = 255, .b = 0 });
+    psx.GPU_GP0.* = psx.gp0XY(32, screen_height - 32);
+    psx.GPU_GP0.* = psx.gp0Rgb(.{ .r = 0, .g = 0, .b = 255 });
+    psx.GPU_GP0.* = psx.gp0XY(screen_width - 32, screen_height - 32);
+
     // Send two GP1 commands to set the origin of the area we want to display
     // and switch on the display output.
     psx.waitForGp0Ready();

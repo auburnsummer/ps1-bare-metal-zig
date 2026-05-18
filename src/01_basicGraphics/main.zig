@@ -70,7 +70,7 @@ pub fn main() noreturn {
     psx.GPU_GP0.* = psx.gp0FbOffset2(screen_width - 1, screen_height - 1);
     psx.GPU_GP0.* = psx.gp0FbOrigin(0, 0);
 
-    // Send a VRAM fill command to quickly fill our area with a dark greenish blue. Note
+    // Send a VRAM fill command to quickly fill our area with a dark green. Note
     // that the coordinates passed to this specific command are *not* relative
     // to the ones we've just sent to the GPU!
     psx.waitForGp0Ready();

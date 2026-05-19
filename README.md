@@ -28,6 +28,9 @@ into something that isn't supported properly yet (...maybe the GTE stuff but we'
    instruction which doesn't exist in MIPS-I when compiling atomics.zig in compiler-rt
  - pass `-OReleaseFast` when compiling, the division safety check Zig emits uses
    `teq` instruction which doesn't exist in MIPS-I
-- `zig objdump` doesn't work for ELF files yet, but you can use `mipsel-none-elf-objdump` instead, e.g.
-
+ - `zig objdump` doesn't work for ELF files yet, but you can use `mipsel-none-elf-objdump` instead, e.g.
    `mipsel-none-elf-objdump -d -S -M no-aliases <elf file>`
+ - The aforementioned `MIPS-I support is experimental` warning is treated as an error
+   in zig.build so we're using a Makefile for now
+ - Zig toolchain doesn't respect the `ENTRY(...)` directive in the linker, you have to
+   pass it it in the `zig build-exe` command

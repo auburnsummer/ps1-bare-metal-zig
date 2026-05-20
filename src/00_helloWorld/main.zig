@@ -38,7 +38,7 @@
 // terminal window run:
 //  `nc localhost 6699` (or whatever port you configured it to) to see the output.
 
-const psx = @import("./ps1/registers.zig");
+const psx = @import("ps1").registers;
 
 fn printCharacter(char: u8) void {
     // Wait until the serial interface is ready to send a new byte, then write

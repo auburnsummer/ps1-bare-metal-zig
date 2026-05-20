@@ -1,8 +1,9 @@
 //! The entry point for our program.
 //! In C-land this is called "crt0" and is responsible for initializing and then calling main().
 
-const logging = @import("./libc/logging.zig");
 const std = @import("std");
+const libc = @import("runtime");
+const logging = libc.logging;
 
 // Add memcpy/memset/memmove symbols to the binary which
 // are used by std.fmt.bufPrint.
@@ -11,7 +12,7 @@ const std = @import("std");
 // Theoretically we could also get these by including Zig's compiler-rt
 // library, but it doesn't currently support MIPS-I as far as I can tell.
 comptime {
-    _ = @import("./libc/mem.zig");
+    _ = libc.mem;
 }
 
 // This sets the log function used by, e.g. std.log to our custom log

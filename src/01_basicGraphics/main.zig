@@ -1,7 +1,7 @@
 const std = @import("std");
-const psx = @import("./ps1/registers.zig");
-const gpu = @import("./ps1/gpu_cmd.zig");
-const logging = @import("./libc/logging.zig");
+const logging = @import("runtime").logging;
+const psx = @import("ps1").registers;
+const gpu = @import("ps1").gpu;
 
 pub fn setupGPU(mode: gpu.VideoMode, width: u32, height: u32) void {
     // Set the origin of the displayed framebuffer. These "magic" values,

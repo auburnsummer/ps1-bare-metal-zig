@@ -1,4 +1,4 @@
-const psx = @import("../ps1/registers.zig");
+const psx = @import("ps1").registers;
 const std = @import("std");
 
 pub fn initSerialIO() void {

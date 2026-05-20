@@ -66,7 +66,7 @@ pub fn main() noreturn {
     // Wait for the GPU to become ready, then send some GP0 commands to tell it
     // which area of the framebuffer we want to draw to and enable dithering.
     gpu.waitForGp0Ready();
-    psx.GPU_GP0.* = gpu.gp0drawMode(.{}, true, false);
+    psx.GPU_GP0.* = gpu.gp0SetPage(.{}, true, false);
     psx.GPU_GP0.* = gpu.gp0FbOffset1(0, 0);
     psx.GPU_GP0.* = gpu.gp0FbOffset2(screen_width - 1, screen_height - 1);
     psx.GPU_GP0.* = gpu.gp0FbOrigin(0, 0);

@@ -165,7 +165,7 @@ pub const TexpageColors = enum(u2) {
 };
 
 pub fn waitForGp0Ready() void {
-    while (!psx.GPU_STAT.ready_receive_cmd) {}
+    while (!psx.GPU_STAT.cmd_ready) {}
 }
 
 pub const TexpageAttribute = packed struct(u12) {
@@ -178,7 +178,7 @@ pub const TexpageAttribute = packed struct(u12) {
 };
 
 /// GP0(E1h) - Draw Mode setting (aka "Texpage")
-pub fn gp0drawMode(page: TexpageAttribute, dither: bool, unlock_fb: bool) u32 {
+pub fn gp0SetPage(page: TexpageAttribute, dither: bool, unlock_fb: bool) u32 {
     // The idea here is to create two overlapping structs and then bitwise OR them
     const TexturePagePart = packed struct(u32) {
         page: TexpageAttribute,

@@ -24,7 +24,7 @@ SHARED_MODULES = \
 	-Mruntime=./src/runtime/runtime.zig
 
 .PHONY: all
-all: build/00_helloWorld.psexe build/01_basicGraphics.psexe
+all: build/00_helloWorld.psexe build/01_basicGraphics.psexe build/02_doubleBuffer.psexe
 
 .DEFAULT_GOAL := all
 
@@ -53,3 +53,16 @@ build/01_basicGraphics.elf: $(shell find -L src/01_basicGraphics src/ps1 src/run
 
 build/01_basicGraphics.psexe: build/01_basicGraphics.elf
 	python3 ./build_helpers/convertExecutable.py build/01_basicGraphics.elf build/01_basicGraphics.psexe
+
+build/02_doubleBuffer.elf: $(shell find -L src/02_doubleBuffer src/ps1 src/runtime src/entry.zig -type f)
+	zig build-exe \
+		$(ZIG_FLAGS) \
+		$(ENTRY_MODULE) \
+		--dep ps1 --dep runtime \
+		-Mmain=./src/02_doubleBuffer/main.zig \
+		$(SHARED_MODULES) \
+		--script ./build_helpers/executable.ld \
+		-femit-bin=build/02_doubleBuffer.elf
+
+build/02_doubleBuffer.psexe: build/02_doubleBuffer.elf
+	python3 ./build_helpers/convertExecutable.py build/02_doubleBuffer.elf build/02_doubleBuffer.psexe

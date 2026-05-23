@@ -1,7 +1,7 @@
 const psx = @import("ps1").registers;
 const std = @import("std");
 
-pub fn initSerialIO() void {
+pub fn initSerialIo() void {
     psx.SIO_CTRL(1).reset = true;
 
     psx.SIO_MODE(1).* = .{

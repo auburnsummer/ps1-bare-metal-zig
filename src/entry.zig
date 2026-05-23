@@ -16,7 +16,7 @@ comptime {
 
 // This sets the log function used by, e.g. std.log to our custom log
 // function which writes to SIO1. The implementation is in libc/logging.zig and
-// is similar to what we did in 00_helloWorld. `logging.initSerialIO()` must
+// is similar to what we did in 00_helloWorld. `logging.initSerialIo()` must
 // be called before any logging will work.
 //
 // The default log function will attempt to write to stderr, which

@@ -168,6 +168,34 @@ pub fn waitForGp0Ready() void {
     while (!psx.GPU_STAT.cmd_ready) {}
 }
 
+pub fn setupGpu(mode: VideoMode, width: u32, height: u32) void {
+    const x: u32 = 0x760;
+    const y: u32 = if (mode == .pal) 0xa3 else 0x88;
+
+    const h_res: HorizontalResolution = .res_320;
+    const v_res: VerticalResolution = .res_240;
+
+    const offset_x = (width * getGpuClockMultiplerH(h_res)) / 2;
+    const offset_y = (height / getGpuClockMultipleV(v_res)) / 2;
+
+    psx.GPU_GP1.* = gp1ResetGpu();
+    psx.GPU_GP1.* = gp1FbRangeH(
+        @truncate(x - offset_x),
+        @truncate(x + offset_x),
+    );
+    psx.GPU_GP1.* = gp1FbRangeV(
+        @truncate(y - offset_y),
+        @truncate(y + offset_y),
+    );
+    psx.GPU_GP1.* = gp1FbMode(
+        h_res,
+        v_res,
+        mode,
+        false,
+        .bits_15,
+    );
+}
+
 pub const TexpageAttribute = packed struct(u12) {
     x_base: u4 = 0,
     y_base_1: u1 = 0,

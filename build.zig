@@ -48,7 +48,7 @@ fn addExample(
         .target = target,
         .optimize = optimize,
     });
-    // Technically 00_helloWorld doesn't depend on libc, but it's fine.
+    // Technically 00_helloWorld doesn't depend on runtime, but it's fine.
     main_mod.addImport("ps1", ps1_mod);
     main_mod.addImport("runtime", runtime_mod);
 

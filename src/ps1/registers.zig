@@ -10,6 +10,31 @@ pub const F_CPU = 33868800;
 const KSEG1: u32 = 0xA000_0000;
 
 // // // // // //
+// Interrupts  //
+// // // // // //
+
+pub const InterruptTable = packed struct(u32) {
+    vblank: bool,
+    gpu: bool,
+    cdrom: bool,
+    dma: bool,
+    timer0: bool,
+    timer1: bool,
+    timer2: bool,
+    sio0: bool,
+    sio1: bool,
+    spu: bool,
+    lightgun: bool,
+    _padding: u21 = 0,
+};
+
+/// 1F801070h I_STAT - Interrupt status register (R=Status, W=Acknowledge)
+pub var IRQ_STAT: *volatile InterruptTable = @ptrFromInt(KSEG1 + 0x1f80_1070);
+
+/// 1F801074h I_MASK - Interrupt mask register (R/W)
+pub var IRQ_MASK: *volatile InterruptTable = @ptrFromInt(KSEG1 + 0x1f80_1074);
+
+// // // // // //
 // Serial I/O  //
 // // // // // //
 

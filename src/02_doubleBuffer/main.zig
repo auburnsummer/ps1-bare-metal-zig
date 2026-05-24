@@ -40,21 +40,98 @@
 const std = @import("std");
 const logging = @import("runtime").logging;
 const psx = @import("ps1").registers;
-const gpu = @import("ps1").gpu;
+const gpuc = @import("ps1").gpu_cmd;
+const gpu = @import("runtime").gpu;
 
-const screen_width = 320;
+const screen_width: u10 = 320;
 const screen_height = 240;
+
+fn waitForVSync() void {
+    // The GPU won't tell us directly whenever it is done sending a frame to the
+    // display, but it will send a signal to another peripheral known as the
+    // interrupt controller (which will be covered in a future tutorial). We can
+    // thus wait until the interrupt controller's vertical blank flag gets set,
+    // then reset (acknowledge) it so that it can be set again by the GPU.
+    while (!psx.IRQ_STAT.vblank) {}
+
+    // acknowledge
+    psx.IRQ_STAT.vblank = false;
+}
 
 pub fn main() noreturn {
     logging.initSerialIo();
 
     if (psx.GPU_STAT.video_mode == .pal) {
         std.log.info("Using PAL mode", .{});
-        gpu.setupGpu(.pal, screen_width, screen_height);
+        // waitForGp0Ready and setupGpu from the previous example are moved to a seperate module.
+        gpu.setupGpu(.pal, .res_320, .res_240, screen_width, screen_height);
     } else {
         std.log.info("Using NTSC mode", .{});
-        gpu.setupGpu(.ntsc, screen_width, screen_height);
+        gpu.setupGpu(.ntsc, .res_320, .res_240, screen_width, screen_height);
     }
 
-    while (true) {}
+    var x: i16 = 0;
+    var dx: i16 = 1;
+    var y: i16 = 0;
+    var dy: i16 = 1;
+
+    var using_second_frame: bool = false;
+
+    while (true) {
+        // Determine the VRAM location of the current frame. We're going to
+        // place the two frames next to each other in VRAM, at (0, 0) and
+        // (320, 0) respectively.
+        const frame_x: u10 = if (using_second_frame) screen_width else 0;
+        const frame_y = 0;
+
+        using_second_frame = !using_second_frame;
+
+        // Tell the GPU which area of VRAM belongs to the frame we're going to
+        // use and enable dithering.
+        gpu.waitForGp0Ready();
+        psx.GPU_GP0.* = gpuc.gp0SetPage(.{}, true, false);
+        psx.GPU_GP0.* = gpuc.gp0FbOffset1(frame_x, frame_y);
+        psx.GPU_GP0.* = gpuc.gp0FbOffset2(
+            frame_x + screen_width - 1,
+            frame_y + screen_height - 1,
+        );
+        psx.GPU_GP0.* = gpuc.gp0FbOrigin(frame_x, frame_y);
+
+        // Fill the framebuffer with solid gray.
+        gpu.waitForGp0Ready();
+        psx.GPU_GP0.* = gpuc.gp0VramFill(.{ .r = 64, .g = 64, .b = 64 });
+        psx.GPU_GP0.* = gpuc.gp0XY(frame_x, frame_y);
+        psx.GPU_GP0.* = gpuc.gp0WidthHeight(screen_width, screen_height);
+
+        // Draw the yellow bouncing square using a rectangle command.
+        gpu.waitForGp0Ready();
+        psx.GPU_GP0.* = gpuc.gp0Rectangle(
+            .{ .r = 255, .g = 255, .b = 0 },
+            false,
+            false,
+            false,
+            .px_variable,
+        );
+        psx.GPU_GP0.* = gpuc.gp0XY(@abs(x), @abs(y));
+        psx.GPU_GP0.* = gpuc.gp0WidthHeight(32, 32);
+
+        // Update the position of the square.
+        x = x +| dx;
+        y = y +| dy;
+
+        if (x <= 0 or x >= (screen_width - 32)) {
+            dx = -dx;
+        }
+        if (y <= 0 or y >= (screen_height - 32)) {
+            dy = -dy;
+        }
+
+        // Wait for the GPU to finish drawing and displaying the contents of the
+        // previous frame, then tell it to start sending the newly drawn frame
+        // to the video output.
+        gpu.waitForGp0Ready();
+        waitForVSync();
+
+        psx.GPU_GP1.* = gpuc.gp1FbOffset(frame_x, frame_y);
+    }
 }

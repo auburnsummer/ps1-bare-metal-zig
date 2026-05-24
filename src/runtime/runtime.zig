@@ -1,2 +1,3 @@
 pub const logging = @import("./logging.zig");
 pub const mem = @import("./mem.zig");
+pub const gpu = @import("./gpu.zig");

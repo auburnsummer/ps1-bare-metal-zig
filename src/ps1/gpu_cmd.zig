@@ -24,7 +24,9 @@ pub const HorizontalResolution = enum(u3) {
 };
 
 pub const VerticalResolution = enum(u1) {
+    /// 256 on PAL
     res_240,
+    /// 512 on PAL
     res_480,
 };
 
@@ -164,38 +166,6 @@ pub const TexpageColors = enum(u2) {
     _reserved,
 };
 
-pub fn waitForGp0Ready() void {
-    while (!psx.GPU_STAT.cmd_ready) {}
-}
-
-pub fn setupGpu(mode: VideoMode, width: u32, height: u32) void {
-    const x: u32 = 0x760;
-    const y: u32 = if (mode == .pal) 0xa3 else 0x88;
-
-    const h_res: HorizontalResolution = .res_320;
-    const v_res: VerticalResolution = .res_240;
-
-    const offset_x = (width * getGpuClockMultiplerH(h_res)) / 2;
-    const offset_y = (height / getGpuClockMultipleV(v_res)) / 2;
-
-    psx.GPU_GP1.* = gp1ResetGpu();
-    psx.GPU_GP1.* = gp1FbRangeH(
-        @truncate(x - offset_x),
-        @truncate(x + offset_x),
-    );
-    psx.GPU_GP1.* = gp1FbRangeV(
-        @truncate(y - offset_y),
-        @truncate(y + offset_y),
-    );
-    psx.GPU_GP1.* = gp1FbMode(
-        h_res,
-        v_res,
-        mode,
-        false,
-        .bits_15,
-    );
-}
-
 pub const TexpageAttribute = packed struct(u12) {
     x_base: u4 = 0,
     y_base_1: u1 = 0,
@@ -323,4 +293,29 @@ pub fn gp0Polygon(
 
 pub fn gp0ShadedTriangle(color: RgbColor, gourand: bool, textured: bool, blend: bool) u32 {
     return gp0Polygon(color, false, blend, textured, false, gourand);
+}
+
+pub const RectangleSize = enum(u2) {
+    px_variable,
+    px_1x1,
+    px_8x8,
+    px_16x16,
+};
+
+pub fn gp0Rectangle(color: RgbColor, unshaded: bool, blend: bool, textured: bool, size: RectangleSize) u32 {
+    const Cmd = packed struct(u32) {
+        color: RgbColor,
+        unshaded: bool,
+        blend: bool,
+        textured: bool,
+        size: RectangleSize,
+        _cmd: u3 = 0b011,
+    };
+    return @bitCast(Cmd{
+        .color = color,
+        .unshaded = unshaded,
+        .blend = blend,
+        .textured = textured,
+        .size = size,
+    });
 }

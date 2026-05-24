@@ -3,6 +3,7 @@
 
 const std = @import("std");
 const logging = @import("runtime").logging;
+const psx = @import("ps1").registers;
 
 // Add memcpy/memset/memmove symbols to the binary which
 // are used by std.fmt.bufPrint.
@@ -37,6 +38,10 @@ export fn __start() noreturn {
     // Zero out the .bss section. Zero-initialised global variables go here.
     const len = bss_end - bss_start;
     @memset(bss_start[0..len], 0);
+
+    // Set interrupt masks to disable all by default.
+    // Note that IRQ_STAT still gets set; this is just to stop handlers.
+    psx.IRQ_MASK.* = @bitCast(@as(u32, 0));
 
     main_module.main();
 }

@@ -59,6 +59,7 @@ fn addExample(
     });
     root_mod.addImport("main", main_mod);
     root_mod.addImport("runtime", runtime_mod);
+    root_mod.addImport("ps1", ps1_mod);
 
     // addExecutable would complain about a missing `main` symbol.
     // We only have a `__start` symbol in MIPS-land, but ZLS thinks we're

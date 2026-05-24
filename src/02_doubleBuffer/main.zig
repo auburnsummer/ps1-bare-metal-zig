@@ -58,6 +58,10 @@ fn waitForVSync() void {
     psx.IRQ_STAT.vblank = false;
 }
 
+fn clip(x: i16) u16 {
+    return @max(0, x);
+}
+
 pub fn main() noreturn {
     logging.initSerialIo();
 
@@ -112,7 +116,7 @@ pub fn main() noreturn {
             false,
             .px_variable,
         );
-        psx.GPU_GP0.* = gpuc.gp0XY(@abs(x), @abs(y));
+        psx.GPU_GP0.* = gpuc.gp0XY(clip(x), clip(y));
         psx.GPU_GP0.* = gpuc.gp0WidthHeight(32, 32);
 
         // Update the position of the square.

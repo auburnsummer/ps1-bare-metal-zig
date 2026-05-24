@@ -13,7 +13,7 @@ ZIG_FLAGS = \
 	-fno-ubsan-rt
 
 ENTRY_MODULE = \
-	--dep main --dep runtime \
+	--dep main --dep runtime --dep ps1 \
 	-Mroot=./src/entry.zig \
 
 # Shared module declarations. 

@@ -67,22 +67,22 @@ pub const DmaTransferMode = enum(u2) {
 };
 
 pub const DmaChannelControl = packed struct(u32) {
-    write: bool,
-    reverse: bool,
+    write: bool = false,
+    reverse: bool = false,
     _padding1: u6 = 0,
-    chopping: bool,
-    mode: DmaTransferMode,
+    chopping: bool = false,
+    mode: DmaTransferMode = .burst,
     _padding2: u5 = 0,
-    chopping_dma_window: u3,
+    chopping_dma_window: u3 = 0b000,
     _padding3: u1 = 0,
-    chopping_cpu_window: u3,
+    chopping_cpu_window: u3 = 0b000,
     _padding4: u1 = 0,
-    enable: bool,
+    enable: bool = false,
     _padding5: u3 = 0,
-    trigger: bool,
+    trigger: bool = false,
     /// burst mode only
-    pause: bool,
-    snoop: bool,
+    pause: bool = false,
+    snoop: bool = false,
     _padding6: u1 = 0,
 };
 

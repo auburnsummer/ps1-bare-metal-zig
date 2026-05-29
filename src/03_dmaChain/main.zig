@@ -96,6 +96,37 @@ fn clip(x: i16) u16 {
     return @max(0, x);
 }
 
+const dma_max_chunk_size = 16;
+const gpa_chain_buffer_size = 1024;
+
+// for this example, I'll just allocate two buffers to store commands in,
+// one for each framebuffer.
+var chain_1: [gpa_chain_buffer_size]u8 = undefined;
+var chain_2: [gpa_chain_buffer_size]u8 = undefined;
+
+fn allocGp0Packet(al: std.mem.Allocator, num_commands: u4) []u32 {
+    // allocate memory. we need enough to store the header of the packet + commands.
+    // the DMA must read from 4-byte aligned boundaries.
+    const buffer = al.alignedAlloc(u32, .@"4", num_commands + 1) catch unreachable;
+    return buffer;
+}
+
+fn sendGpuLinkedList(ptr: [*]u32) void {
+    // Wait until the GPU's DMA unit has finished sending data and is ready.
+    while (psx.DMA_CHCR(.gpu).enable) {}
+
+    // Give DMA a pointer to the beginning of the data and tell it to send it in
+    // linked list mode. The DMA unit will start parsing a chain of "packets"
+    // from RAM, with each packet being made up of a 32-bit header followed by
+    // zero or more 32-bit commands to be sent to the GP0 register.
+    psx.DMA_MADR(.gpu).addr = @truncate(@intFromPtr(ptr));
+    psx.DMA_CHCR(.gpu).* = .{
+        .write = true,
+        .mode = .linked_list,
+        .enable = true,
+    };
+}
+
 pub fn main() noreturn {
     logging.initSerialIo();
 
@@ -121,36 +152,61 @@ pub fn main() noreturn {
         const frame_x: u10 = if (using_second_frame) screen_width else 0;
         const frame_y = 0;
 
+        var chain = if (using_second_frame) chain_1 else chain_2;
+
         using_second_frame = !using_second_frame;
 
-        // Tell the GPU which area of VRAM belongs to the frame we're going to
-        // use and enable dithering.
-        gpu.waitForGp0Ready();
-        psx.GPU_GP0.* = gpuc.gp0SetPage(.{}, true, false);
-        psx.GPU_GP0.* = gpuc.gp0FbOffset1(frame_x, frame_y);
-        psx.GPU_GP0.* = gpuc.gp0FbOffset2(
+        // Display the frame that was just drawn by the GPU (if any). We are
+        // going to overwrite its respective DMA chain afterwards, as the GPU no
+        // longer needs it.
+        psx.GPU_GP1.* = gpuc.gp1FbOffset(frame_x, frame_y);
+
+        // Reassign the allocator back to the start of the chain.
+        var fba: std.heap.FixedBufferAllocator = .init(&chain);
+        const allocator = fba.allocator();
+
+        // Create a new DMA packet for each GP0 command we're sending. Splitting
+        // up each command like this will make sure the DMA channel won't try to
+        // send them too quickly and end up overflowing the GPU's internal
+        // command processor.
+        const packet = allocGp0Packet(allocator, 4);
+        // packet[0] will be the header, but wait to set it until we have the next packet to point it at.
+        packet[1] = gpuc.gp0SetPage(.{}, true, false);
+        packet[2] = gpuc.gp0FbOffset1(frame_x, frame_y);
+        packet[3] = gpuc.gp0FbOffset2(
             frame_x + screen_width - 1,
             frame_y + screen_height - 1,
         );
-        psx.GPU_GP0.* = gpuc.gp0FbOrigin(frame_x, frame_y);
+        packet[4] = gpuc.gp0FbOrigin(frame_x, frame_y);
 
-        // Fill the framebuffer with solid gray.
-        gpu.waitForGp0Ready();
-        psx.GPU_GP0.* = gpuc.gp0VramFill(.{ .r = 64, .g = 64, .b = 64 });
-        psx.GPU_GP0.* = gpuc.gp0XY(frame_x, frame_y);
-        psx.GPU_GP0.* = gpuc.gp0WidthHeight(screen_width, screen_height);
+        // Next packet (grey background). Allocate it...
+        const packet2 = allocGp0Packet(allocator, 3);
+        // Now we can point the header of the previous packet to this one.
+        packet[0] = @bitCast(gpuc.DmaTag{ .len = 4, .next = @truncate(@intFromPtr(packet2.ptr)) });
 
-        // Draw the yellow bouncing square using a rectangle command.
-        gpu.waitForGp0Ready();
-        psx.GPU_GP0.* = gpuc.gp0Rectangle(
+        packet2[1] = gpuc.gp0VramFill(.{ .r = 64, .g = 64, .b = 64 });
+        packet2[2] = gpuc.gp0XY(frame_x, frame_y);
+        packet2[3] = gpuc.gp0WidthHeight(screen_width, screen_height);
+
+        // Next packet (yellow bouncing square.)
+        const packet3 = allocGp0Packet(allocator, 3);
+        packet2[0] = @bitCast(gpuc.DmaTag{ .len = 3, .next = @truncate(@intFromPtr(packet3.ptr)) });
+        packet3[1] = gpuc.gp0Rectangle(
             .{ .r = 255, .g = 255, .b = 0 },
             false,
             false,
             false,
             .px_variable,
         );
-        psx.GPU_GP0.* = gpuc.gp0XY(clip(x), clip(y));
-        psx.GPU_GP0.* = gpuc.gp0WidthHeight(32, 32);
+        packet3[2] = gpuc.gp0XY(clip(x), clip(y));
+        packet3[3] = gpuc.gp0WidthHeight(32, 32);
+
+        // Terminate the linked list by pointing the last packet to a terminator header:
+        // a header with 0 length and next address 0xFFFFFF.
+        const packet4 = allocGp0Packet(allocator, 0);
+        packet3[0] = @bitCast(gpuc.DmaTag{ .len = 3, .next = @truncate(@intFromPtr(packet4.ptr)) });
+
+        packet4[0] = @bitCast(gpuc.DmaTag{ .len = 0, .next = 0xFFFFFF });
 
         // Update the position of the square.
         x = x +| dx;
@@ -163,12 +219,12 @@ pub fn main() noreturn {
             dy = -dy;
         }
 
-        // Wait for the GPU to finish drawing and displaying the contents of the
-        // previous frame, then tell it to start sending the newly drawn frame
-        // to the video output.
+        // Wait for the previous frame to be displayed, then start sending the
+        // newly built DMA chain in the background while the next iteration of
+        // the main loop is going to run.
         gpu.waitForGp0Ready();
         waitForVSync();
 
-        psx.GPU_GP1.* = gpuc.gp1FbOffset(frame_x, frame_y);
+        sendGpuLinkedList(packet.ptr);
     }
 }

@@ -7,7 +7,8 @@ ZIG_FLAGS = \
 	-mcpu mips1 \
 	-OReleaseFast \
 	-fno-compiler-rt \
-	-fno-ubsan-rt
+	-fno-ubsan-rt \
+	-fsingle-threaded
 
 ENTRY_MODULE = \
 	--dep main --dep runtime --dep ps1 \
@@ -21,7 +22,7 @@ SHARED_MODULES = \
 	-Mruntime=./src/runtime/runtime.zig
 
 .PHONY: all
-all: build/00_helloWorld.psexe build/01_basicGraphics.psexe build/02_doubleBuffer.psexe
+all: build/00_helloWorld.psexe build/01_basicGraphics.psexe build/02_doubleBuffer.psexe build/03_dmaChain.psexe
 
 .DEFAULT_GOAL := all
 
@@ -63,3 +64,16 @@ build/02_doubleBuffer.elf: $(shell find -L src/02_doubleBuffer src/ps1 src/runti
 
 build/02_doubleBuffer.psexe: build/02_doubleBuffer.elf
 	python3 ./build_helpers/convertExecutable.py build/02_doubleBuffer.elf build/02_doubleBuffer.psexe
+
+build/03_dmaChain.elf: $(shell find -L src/03_dmaChain src/ps1 src/runtime src/entry.zig -type f)
+	zig build-exe \
+		$(ZIG_FLAGS) \
+		$(ENTRY_MODULE) \
+		--dep ps1 --dep runtime \
+		-Mmain=./src/03_dmaChain/main.zig \
+		$(SHARED_MODULES) \
+		--script ./build_helpers/executable.ld \
+		-femit-bin=build/03_dmaChain.elf
+
+build/03_dmaChain.psexe: build/03_dmaChain.elf
+	python3 ./build_helpers/convertExecutable.py build/03_dmaChain.elf build/03_dmaChain.psexe

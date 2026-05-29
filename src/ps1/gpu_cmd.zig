@@ -13,7 +13,7 @@ pub const DmaRequestMode = enum(u2) {
 };
 
 /// Dma tag: https://psx-spx.consoledev.net/dmachannels/#linked-list-dma
-const DmaTag = packed struct(u32) {
+pub const DmaTag = packed struct(u32) {
     next: u24,
     len: u8,
 };

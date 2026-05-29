@@ -12,6 +12,12 @@ pub const DmaRequestMode = enum(u2) {
     gpu_to_cpu,
 };
 
+/// Dma tag: https://psx-spx.consoledev.net/dmachannels/#linked-list-dma
+const DmaTag = packed struct(u32) {
+    next: u24,
+    len: u8,
+};
+
 /// Horizontal Resolution as laid out in the GPUSTAT register,
 /// bit 0: 1 if 368
 /// bits 1-2: 256/320/512/640

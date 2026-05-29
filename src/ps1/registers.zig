@@ -35,6 +35,73 @@ pub var IRQ_STAT: *volatile InterruptTable = @ptrFromInt(KSEG1 + 0x1f80_1070);
 pub var IRQ_MASK: *volatile InterruptTable = @ptrFromInt(KSEG1 + 0x1f80_1074);
 
 // // // // // //
+//     DMA.    //
+// // // // // //
+
+pub const DmaControlSection = packed struct(u4) {
+    priority: u3,
+    enable: bool,
+};
+
+pub const DmaControl = packed struct(u32) {
+    mdec_in: DmaControlSection,
+    mdec_out: DmaControlSection,
+    gpu: DmaControlSection,
+    cdrom: DmaControlSection,
+    spu: DmaControlSection,
+    pio: DmaControlSection,
+    otc: DmaControlSection,
+    cpu: DmaControlSection,
+};
+
+/// 1F8010F0h - DPCR - DMA Control Register (R/W)
+pub const DMA_DPCR: *volatile DmaControl = @ptrFromInt(KSEG1 + 0x1f80_10f0);
+
+pub const DmaChannelName = enum(u3) { mdec_in, mdec_out, gpu, cdrom, spu, pio, otc };
+
+pub const DmaTransferMode = enum(u2) {
+    burst,
+    slice,
+    linked_list,
+    _reserved,
+};
+
+pub const DmaChannelControl = packed struct(u32) {
+    write: bool,
+    reverse: bool,
+    _padding1: u6 = 0,
+    chopping: bool,
+    mode: DmaTransferMode,
+    _padding2: u5 = 0,
+    chopping_dma_window: u3,
+    _padding3: u1 = 0,
+    chopping_cpu_window: u3,
+    _padding4: u1 = 0,
+    enable: bool,
+    _padding5: u3 = 0,
+    trigger: bool,
+    /// burst mode only
+    pause: bool,
+    snoop: bool,
+    _padding6: u1 = 0,
+};
+
+/// 1F801088h+N*10h - D#_CHCR - DMA Channel Control (Channel 0..6) (R/W)
+pub fn DMA_CHCR(comptime n: DmaChannelName) *volatile DmaChannelControl {
+    return @ptrFromInt(KSEG1 + 0x1F80_1088 + (0x10 * @as(u32, @intFromEnum(n))));
+}
+
+pub const DmaBaseAddress = packed struct(u32) {
+    addr: u24,
+    _padding: u8 = 0,
+};
+
+/// 1F801080h+N*10h - D#_MADR - DMA base address (Channel 0..6) (R/W)
+pub fn DMA_MADR(comptime n: DmaChannelName) *volatile DmaBaseAddress {
+    return @ptrFromInt(KSEG1 + 0x1F80_1080 + (0x10 * @as(u32, @intFromEnum(n))));
+}
+
+// // // // // //
 // Serial I/O  //
 // // // // // //
 

@@ -2,9 +2,6 @@
 # because Zig's build throws a warning "MIPS-I support is experimental"
 # but this warning cannot be ignored and is treated as an error by the build system.
 
-# you might be wondering, why not cmake?
-# i am scared of cmake
-
 ZIG_FLAGS = \
 	-target mipsel-freestanding \
 	-mcpu mips1 \
@@ -17,7 +14,7 @@ ENTRY_MODULE = \
 	-Mroot=./src/entry.zig \
 
 # Shared module declarations. 
-# `libc` depends on `ps1`.
+# `runtime` depends on `ps1`.
 SHARED_MODULES = \
 	-Mps1=./src/ps1/ps1.zig \
 	--dep ps1 \

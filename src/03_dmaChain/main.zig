@@ -13,29 +13,23 @@
 // THER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 // PERFORMANCE OF THIS SOFTWARE.
 
-// We saw how to initialize the GPU and get basic graphics on screen in the last
-// tutorial. It's now time to add motion to the mix: we're going to draw a
-// square which, in true DVD player screensaver fashion, will bounce around on
-// the screen.
-//
-// This may sound simple in theory, but there are a few caveats we'll have to
-// look out for. First of all we will need some sort of timer for our animation,
-// ideally something synchronized to the display output in order to avoid
-// updating the position of our square while the picture is still being sent by
-// the GPU to the monitor (and stabilize the frame rate). We'll also have to
-// ensure the frame we are sending in the first place is not actively being
-// updated by the GPU, otherwise screen tearing will be prominent. Hiding a
-// frame while it is being drawn may sound tricky, but there is a very simple
-// way to accomplish it: we are going to keep *two* frames in VRAM, and draw one
-// while the other is being displayed. Once drawing is done and the other frame
-// has been fully sent to the display, we're going to swap the buffers (so that
-// the newly rendered frame will be displayed) and start over.
-//
-// This is an extremely common practice (the device you are looking at right now
-// is no doubt using it) known as double buffering, and you can read more about
-// it here:
-//     https://gameprogrammingpatterns.com/double-buffer.html
-//
+// /*
+//  * In the previous two examples we saw how to control the GPU and draw graphics
+//  * by writing commands directly to the GP0 and GP1 registers. While this
+//  * approach is simple and easy to understand, it also limits performance: the
+//  * CPU always has to wait for the GPU to go idle before being able to send it a
+//  * new command, otherwise the GPU may miss it; similarly, the GPU can only
+//  * process commands while the CPU is actively feeding it.
+//  *
+//  * To get around these limitations the GPU (along with most of the PS1's other
+//  * peripherals) can instead be given access to RAM and read GP0 commands from it
+//  * automatically, without needing the CPU to feed it. This is accomplished
+//  * through a middleman peripheral known as the direct memory access (DMA)
+//  * controller, and is the key to high-performance graphics on the PS1. We'll see
+//  * how to allocate a buffer in RAM, fill it with commands and then set up the
+//  * GPU's DMA channel to read from it in the background while we're preparing the
+//  * next frame's command buffer.
+//  */
 
 const std = @import("std");
 const logging = @import("runtime").logging;
@@ -63,9 +57,6 @@ pub fn setupGpu(
     width: u32,
     height: u32,
 ) void {
-    // Set the origin of the displayed framebuffer. These "magic" values,
-    // derived from the GPU's internal clocks, will center the picture on most
-    // displays and upscalers.
     const x: u32 = 0x760;
     const y: u32 = if (mode == .pal) 0xa3 else 0x88;
 
@@ -92,6 +83,13 @@ pub fn setupGpu(
         .bits_15,
     );
     psx.GPU_GP1.* = gpuc.gp1Blank(false);
+
+    // Enable and reset the GPU's DMA channel, then tell the GPU to fetch GP0
+    // commands from DMA whenever available.
+    psx.DMA_DPCR.gpu.enable = true;
+    psx.DMA_CHCR(.gpu).* = @bitCast(@as(u32, 0));
+
+    psx.GPU_GP1.* = gpuc.gp1DmaRequestMode(.cpu_to_gp0);
 }
 
 fn clip(x: i16) u16 {

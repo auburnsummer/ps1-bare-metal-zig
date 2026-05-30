@@ -96,6 +96,8 @@ fn clip(x: i16) u16 {
     return @max(0, x);
 }
 
+const DmaPacket = struct { header: *gpuc.DmaTag, data: []u32 };
+
 const dma_max_chunk_size = 16;
 const gpa_chain_buffer_size = 1024;
 
@@ -109,6 +111,21 @@ fn allocGp0Packet(al: std.mem.Allocator, num_commands: u4) []u32 {
     // the DMA must read from 4-byte aligned boundaries.
     const buffer = al.alignedAlloc(u32, .@"4", num_commands + 1) catch unreachable;
     return buffer;
+}
+
+fn allocateGp0Packet(al: std.mem.Allocator, num_commands: u4) DmaPacket {
+    // allocate memory. we need enough to store the header of the packet + commands.
+    // the DMA must read from 4-byte aligned boundaries.
+    const buffer = al.alignedAlloc(u32, .@"4", num_commands + 1) catch unreachable;
+    // first word is the header.
+    const header_ptr: *gpuc.DmaTag = @ptrCast(buffer.ptr);
+    // we'll set the length as well while we're here.
+    header_ptr.len = num_commands;
+    // the remainder of the buffer is the data.
+    return .{
+        .header = header_ptr,
+        .data = buffer[1..],
+    };
 }
 
 fn sendGpuLinkedList(ptr: [*]u32) void {
@@ -125,6 +142,11 @@ fn sendGpuLinkedList(ptr: [*]u32) void {
         .mode = .linked_list,
         .enable = true,
     };
+}
+
+fn pcsxDebugBreak() void {
+    const debug_addr: *volatile u8 = @ptrFromInt(0x1f80_2081);
+    debug_addr.* = 0;
 }
 
 pub fn main() noreturn {
@@ -152,8 +174,6 @@ pub fn main() noreturn {
         const frame_x: u10 = if (using_second_frame) screen_width else 0;
         const frame_y = 0;
 
-        var chain = if (using_second_frame) chain_1 else chain_2;
-
         using_second_frame = !using_second_frame;
 
         // Display the frame that was just drawn by the GPU (if any). We are
@@ -162,7 +182,7 @@ pub fn main() noreturn {
         psx.GPU_GP1.* = gpuc.gp1FbOffset(frame_x, frame_y);
 
         // Reassign the allocator back to the start of the chain.
-        var fba: std.heap.FixedBufferAllocator = .init(&chain);
+        var fba: std.heap.FixedBufferAllocator = if (using_second_frame) .init(&chain_1) else .init(&chain_2);
         const allocator = fba.allocator();
 
         // Create a new DMA packet for each GP0 command we're sending. Splitting
@@ -207,6 +227,12 @@ pub fn main() noreturn {
         packet3[0] = @bitCast(gpuc.DmaTag{ .len = 3, .next = @truncate(@intFromPtr(packet4.ptr)) });
 
         packet4[0] = @bitCast(gpuc.DmaTag{ .len = 0, .next = 0xFFFFFF });
+
+        // std.log.info("about to breakpoint!", .{});
+        // // @breakpoint();
+        // std.log.info("PACKET 1 MEMORY ADDRESS: 0x{x}", .{@intFromPtr(packet.ptr)});
+        // pcsxDebugBreak();
+        // std.log.info("after breakpoint!", .{});
 
         // Update the position of the square.
         x = x +| dx;

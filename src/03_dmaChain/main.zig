@@ -96,6 +96,9 @@ fn clip(x: i16) u16 {
     return @max(0, x);
 }
 
+/// Holds a pointer to the header and data sections of a packet.
+/// It's important that the header and the data are adjacent in memory, so
+/// use allocateGp0Packet to make one of these.
 const DmaPacket = struct { header: *gpuc.DmaTag, data: []u32 };
 
 const dma_max_chunk_size = 16;
@@ -105,13 +108,6 @@ const gpa_chain_buffer_size = 1024;
 // one for each framebuffer.
 var chain_1: [gpa_chain_buffer_size]u8 = undefined;
 var chain_2: [gpa_chain_buffer_size]u8 = undefined;
-
-fn allocGp0Packet(al: std.mem.Allocator, num_commands: u4) []u32 {
-    // allocate memory. we need enough to store the header of the packet + commands.
-    // the DMA must read from 4-byte aligned boundaries.
-    const buffer = al.alignedAlloc(u32, .@"4", num_commands + 1) catch unreachable;
-    return buffer;
-}
 
 fn allocateGp0Packet(al: std.mem.Allocator, num_commands: u4) DmaPacket {
     // allocate memory. we need enough to store the header of the packet + commands.
@@ -128,7 +124,7 @@ fn allocateGp0Packet(al: std.mem.Allocator, num_commands: u4) DmaPacket {
     };
 }
 
-fn sendGpuLinkedList(ptr: [*]u32) void {
+fn sendGpuLinkedList(ptr: *u32) void {
     // Wait until the GPU's DMA unit has finished sending data and is ready.
     while (psx.DMA_CHCR(.gpu).enable) {}
 
@@ -189,44 +185,42 @@ pub fn main() noreturn {
         // up each command like this will make sure the DMA channel won't try to
         // send them too quickly and end up overflowing the GPU's internal
         // command processor.
-        const packet = allocGp0Packet(allocator, 4);
-        // packet[0] will be the header, but wait to set it until we have the next packet to point it at.
-        packet[1] = gpuc.gp0SetPage(.{}, true, false);
-        packet[2] = gpuc.gp0FbOffset1(frame_x, frame_y);
-        packet[3] = gpuc.gp0FbOffset2(
+        const packet_1 = allocateGp0Packet(allocator, 4);
+        packet_1.data[0] = gpuc.gp0SetPage(.{}, true, false);
+        packet_1.data[1] = gpuc.gp0FbOffset1(frame_x, frame_y);
+        packet_1.data[2] = gpuc.gp0FbOffset2(
             frame_x + screen_width - 1,
             frame_y + screen_height - 1,
         );
-        packet[4] = gpuc.gp0FbOrigin(frame_x, frame_y);
+        packet_1.data[3] = gpuc.gp0FbOrigin(frame_x, frame_y);
 
         // Next packet (grey background). Allocate it...
-        const packet2 = allocGp0Packet(allocator, 3);
+        const packet_2 = allocateGp0Packet(allocator, 3);
         // Now we can point the header of the previous packet to this one.
-        packet[0] = @bitCast(gpuc.DmaTag{ .len = 4, .next = @truncate(@intFromPtr(packet2.ptr)) });
-
-        packet2[1] = gpuc.gp0VramFill(.{ .r = 64, .g = 64, .b = 64 });
-        packet2[2] = gpuc.gp0XY(frame_x, frame_y);
-        packet2[3] = gpuc.gp0WidthHeight(screen_width, screen_height);
+        packet_1.header.next = @truncate(@intFromPtr(packet_2.header));
+        packet_2.data[0] = gpuc.gp0VramFill(.{ .r = 64, .g = 64, .b = 64 });
+        packet_2.data[1] = gpuc.gp0XY(frame_x, frame_y);
+        packet_2.data[2] = gpuc.gp0WidthHeight(screen_width, screen_height);
 
         // Next packet (yellow bouncing square.)
-        const packet3 = allocGp0Packet(allocator, 3);
-        packet2[0] = @bitCast(gpuc.DmaTag{ .len = 3, .next = @truncate(@intFromPtr(packet3.ptr)) });
-        packet3[1] = gpuc.gp0Rectangle(
+        const packet_3 = allocateGp0Packet(allocator, 3);
+        packet_2.header.next = @truncate(@intFromPtr(packet_3.header));
+        packet_3.data[0] = gpuc.gp0Rectangle(
             .{ .r = 255, .g = 255, .b = 0 },
             false,
             false,
             false,
             .px_variable,
         );
-        packet3[2] = gpuc.gp0XY(clip(x), clip(y));
-        packet3[3] = gpuc.gp0WidthHeight(32, 32);
+        packet_3.data[1] = gpuc.gp0XY(clip(x), clip(y));
+        packet_3.data[2] = gpuc.gp0WidthHeight(32, 32);
 
         // Terminate the linked list by pointing the last packet to a terminator header:
         // a header with 0 length and next address 0xFFFFFF.
-        const packet4 = allocGp0Packet(allocator, 0);
-        packet3[0] = @bitCast(gpuc.DmaTag{ .len = 3, .next = @truncate(@intFromPtr(packet4.ptr)) });
+        const packet_4 = allocateGp0Packet(allocator, 0);
+        packet_3.header.next = @truncate(@intFromPtr(packet_4.header));
 
-        packet4[0] = @bitCast(gpuc.DmaTag{ .len = 0, .next = 0xFFFFFF });
+        packet_4.header.next = 0xFFFFFF;
 
         // std.log.info("about to breakpoint!", .{});
         // // @breakpoint();
@@ -251,6 +245,6 @@ pub fn main() noreturn {
         gpu.waitForGp0Ready();
         waitForVSync();
 
-        sendGpuLinkedList(packet.ptr);
+        sendGpuLinkedList(@ptrCast(packet_1.header));
     }
 }

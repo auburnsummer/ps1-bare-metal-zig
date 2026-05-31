@@ -33,4 +33,34 @@ into something that isn't supported properly yet (...maybe the GTE stuff but we'
  - The aforementioned `MIPS-I support is experimental` warning is treated as an error
    in zig.build so we're using a Makefile for now
  - Zig toolchain doesn't respect the `ENTRY(...)` directive in the linker, you have to
-   pass it it in the `zig build-exe` command
+   pass it it in the `zig build-exe` command instead
+ - When writing to a PSX register represented via a volatile packed struct,
+   do not directly assign an anonymous struct literal:
+
+No:
+
+```zig
+psx.DMA_CHCR(.gpu).* = .{
+    .write = true,
+    .mode = .linked_list,
+    .enable = true,
+};
+``` 
+
+Instead do:
+
+```zig
+psx.DMA_CHCR(.gpu).* = psx.DmaChannelControl{
+    .write = true,
+    .mode = .linked_list,
+    .enable = true,
+};
+``` 
+
+These are actually different! The first one, Zig will directly instantiate the literal
+on top of the volatile struct without a copy, which results in multiple stores, one for each
+field of the struct. The intermediate states can cause unexpected behaviour -- e.g. with
+DMA_CHCR, Zig will write to `enable` multiple times, firing off the DMA multiple times.
+
+The second one does a single write as expected because the entire struct is instantiated
+before its written. This should go away with Zig 0.18 see codeberg.org/ziglang/zig/issues/32009 

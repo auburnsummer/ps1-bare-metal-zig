@@ -4,7 +4,7 @@ const std = @import("std");
 pub fn initSerialIo() void {
     psx.SIO_CTRL(1).reset = true;
 
-    psx.SIO_MODE(1).* = .{
+    psx.SIO_MODE(1).* = psx.SerialIoMode{
         .baud = .mul1,
         .char_length = .bits_8,
         .stop_bit_length = .bits_1,
@@ -12,7 +12,7 @@ pub fn initSerialIo() void {
 
     psx.SIO_BAUD(1).* = psx.F_CPU / 115200;
 
-    psx.SIO_CTRL(1).* = .{
+    psx.SIO_CTRL(1).* = psx.SerialIoControl{
         .tx_enable = true,
         .rx_enable = true,
         .rts = true,

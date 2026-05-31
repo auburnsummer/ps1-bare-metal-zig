@@ -133,7 +133,8 @@ fn sendGpuLinkedList(ptr: *u32) void {
     // from RAM, with each packet being made up of a 32-bit header followed by
     // zero or more 32-bit commands to be sent to the GP0 register.
     psx.DMA_MADR(.gpu).addr = @truncate(@intFromPtr(ptr));
-    psx.DMA_CHCR(.gpu).* = .{
+    // Explicitly name the type to avoid Zig inlining this into multiple stores.
+    psx.DMA_CHCR(.gpu).* = psx.DmaChannelControl{
         .write = true,
         .mode = .linked_list,
         .enable = true,

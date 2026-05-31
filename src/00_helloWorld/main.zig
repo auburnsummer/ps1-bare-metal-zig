@@ -61,7 +61,7 @@ pub fn main() noreturn {
 
     // ...and initialize it to output data with
     // 8 data bits, 1 stop bit and no parity...
-    psx.SIO_MODE(1).* = .{
+    psx.SIO_MODE(1).* = psx.SerialIoMode{
         .baud = .mul1,
         .char_length = .bits_8,
         .stop_bit_length = .bits_1,
@@ -75,7 +75,9 @@ pub fn main() noreturn {
     // each register is commented with its address in the PS1. You can
     // look them up at https://psx-spx.consoledev.net/ which gives a
     // description of each bit.
-    psx.SIO_CTRL(1).* = .{
+    // NOTE: see the SIO_MODE write above for why the type is named
+    // explicitly instead of using an anonymous struct literal.
+    psx.SIO_CTRL(1).* = psx.SerialIoControl{
         .tx_enable = true,
         .rx_enable = true,
         .rts = true,

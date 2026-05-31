@@ -141,11 +141,6 @@ fn sendGpuLinkedList(ptr: *u32) void {
     };
 }
 
-fn pcsxDebugBreak() void {
-    const debug_addr: *volatile u8 = @ptrFromInt(0x1f80_2081);
-    debug_addr.* = 0;
-}
-
 pub fn main() noreturn {
     logging.initSerialIo();
 
@@ -222,12 +217,6 @@ pub fn main() noreturn {
         packet_3.header.next = @truncate(@intFromPtr(packet_4.header));
 
         packet_4.header.next = 0xFFFFFF;
-
-        // std.log.info("about to breakpoint!", .{});
-        // // @breakpoint();
-        // std.log.info("PACKET 1 MEMORY ADDRESS: 0x{x}", .{@intFromPtr(packet.ptr)});
-        // pcsxDebugBreak();
-        // std.log.info("after breakpoint!", .{});
 
         // Update the position of the square.
         x = x +| dx;

@@ -58,8 +58,8 @@ psx.DMA_CHCR(.gpu).* = psx.DmaChannelControl{
 ``` 
 
 These are actually different! The first one, Zig will directly instantiate the literal
-on top of the volatile struct without a copy, which results in multiple stores, one for each
-field of the struct. The intermediate states can cause unexpected behaviour -- e.g. with
+on top of the volatile struct, which results in multiple stores (one for each
+field of the struct). The intermediate states between stores can cause unexpected behaviour -- e.g. with
 DMA_CHCR, Zig will write to `enable` multiple times, firing off the DMA multiple times.
 
 The second one does a single write as expected because the entire struct is instantiated

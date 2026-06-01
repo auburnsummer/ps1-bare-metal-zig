@@ -1,3 +1,4 @@
+/// Module that includes functions for talking to the PS1's SIO1 peripheral.
 const psx = @import("ps1").registers;
 const std = @import("std");
 
@@ -38,7 +39,7 @@ pub fn printString(string: []const u8) void {
         printCharacter(char);
     }
 }
-const MAXIMUM_LOG_SIZE = 64;
+const MAXIMUM_LOG_SIZE = 80;
 
 pub fn logFn(
     comptime level: std.log.Level,

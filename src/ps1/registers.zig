@@ -252,3 +252,44 @@ pub var GPU_STAT: *volatile GpuStat = @ptrFromInt(KSEG1 + 0x1f80_1814);
 
 /// 1F801810h-Write GP0 -- Send GP0 Commands/Packets (Rendering and VRAM Access)
 pub var GPU_GP0: *volatile u32 = @ptrFromInt(KSEG1 + 0x1F80_1810);
+
+// // // // // //
+// MEMORY CTRL //
+// // // // // //
+// From the docs:
+// The Memory Control registers are initialized by the BIOS, and, normally software doesn't need to change that settings.
+// Some registers are useful for expansion hardware (allowing to increase the memory size and bus width).
+// I've only defined the one register we touch.
+
+pub const Expansion2Control = packed struct(u32) {
+    // There are interesting bits in the padding, I just haven't bothered defining them.
+    _padding: u16,
+    addr_bits: u5,
+    _padding2: u11,
+};
+
+/// 1F80101Ch - Expansion 2 Delay/Size (usually 00070777h) (128 bytes, 8bit bus)
+pub const SBUS_DEV8_CTRL: *volatile Expansion2Control = @ptrFromInt(KSEG1 + 0x1f80_101c);
+
+// // // // // //
+// PCSX-REDUX  //
+// // // // // //
+// These are fake registers that exist within the PCSX-Redux emulator.
+
+/// 1F802080h 4 Redux-Expansion ID "PCSX" (R)
+pub const PCSX_REDUX_ID: *volatile u32 = @ptrFromInt(KSEG1 + 0x1F80_2080);
+
+/// "PCSX"
+pub const PCSX_ID = 0x58534350;
+
+/// 1F802080h 1 Redux-Expansion Console putchar (W)
+pub var PCSX_CONSOLE_PUTCHAR: *volatile u8 = @ptrFromInt(KSEG1 + 0x1F80_2080);
+
+/// 1F802081h 1 Redux-Expansion Debug break (W)
+pub var PCSX_DEBUG_BREAK: *volatile u8 = @ptrFromInt(KSEG1 + 0x1f80_2081);
+
+/// 1F802082h 1 Redux-Expansion Exit code (W)
+pub var PCSX_EXIT: *volatile u8 = @ptrFromInt(KSEG1 + 0x1f80_2082);
+
+/// 1F802084h 4 Redux-Expansion Notification message pointer (W)
+pub var PCSX_MESSAGE: *align(4) volatile [*:0]u8 = @ptrFromInt(KSEG1 + 0x1f80_2084);

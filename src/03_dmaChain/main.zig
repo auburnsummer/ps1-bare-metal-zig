@@ -13,23 +13,23 @@
 // THER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 // PERFORMANCE OF THIS SOFTWARE.
 
-// /*
-//  * In the previous two examples we saw how to control the GPU and draw graphics
-//  * by writing commands directly to the GP0 and GP1 registers. While this
-//  * approach is simple and easy to understand, it also limits performance: the
-//  * CPU always has to wait for the GPU to go idle before being able to send it a
-//  * new command, otherwise the GPU may miss it; similarly, the GPU can only
-//  * process commands while the CPU is actively feeding it.
-//  *
-//  * To get around these limitations the GPU (along with most of the PS1's other
-//  * peripherals) can instead be given access to RAM and read GP0 commands from it
-//  * automatically, without needing the CPU to feed it. This is accomplished
-//  * through a middleman peripheral known as the direct memory access (DMA)
-//  * controller, and is the key to high-performance graphics on the PS1. We'll see
-//  * how to allocate a buffer in RAM, fill it with commands and then set up the
-//  * GPU's DMA channel to read from it in the background while we're preparing the
-//  * next frame's command buffer.
-//  */
+//
+// In the previous two examples we saw how to control the GPU and draw graphics
+// by writing commands directly to the GP0 and GP1 registers. While this
+// approach is simple and easy to understand, it also limits performance: the
+// CPU always has to wait for the GPU to go idle before being able to send it a
+// new command, otherwise the GPU may miss it; similarly, the GPU can only
+// process commands while the CPU is actively feeding it.
+//
+// To get around these limitations the GPU (along with most of the PS1's other
+// peripherals) can instead be given access to RAM and read GP0 commands from it
+// automatically, without needing the CPU to feed it. This is accomplished
+// through a middleman peripheral known as the direct memory access (DMA)
+// controller, and is the key to high-performance graphics on the PS1. We'll see
+// how to allocate a buffer in RAM, fill it with commands and then set up the
+// GPU's DMA channel to read from it in the background while we're preparing the
+// next frame's command buffer.
+//
 
 const std = @import("std");
 const logging = @import("runtime").logging;
@@ -97,27 +97,35 @@ fn clip(x: i16) u16 {
 }
 
 /// Holds a pointer to the header and data sections of a packet.
-/// It's important that the header and the data are adjacent in memory, so
+/// The header and the data should be adjacent in memory, so
 /// use allocateGp0Packet to make one of these.
 const DmaPacket = struct { header: *gpuc.DmaTag, data: []u32 };
 
 const dma_max_chunk_size = 16;
-const gpa_chain_buffer_size = 1024;
+const gpa_chain_buffer_size = 1024 * 4;
 
 // for this example, I'll just allocate two buffers to store commands in,
 // one for each framebuffer.
-var chain_1: [gpa_chain_buffer_size]u8 = undefined;
-var chain_2: [gpa_chain_buffer_size]u8 = undefined;
+var chain_1: [gpa_chain_buffer_size]u8 align(4) = undefined;
+var chain_2: [gpa_chain_buffer_size]u8 align(4) = undefined;
 
-fn allocateGp0Packet(al: std.mem.Allocator, num_commands: u4) DmaPacket {
-    // allocate memory. we need enough to store the header of the packet + commands.
-    // the DMA must read from 4-byte aligned boundaries.
-    const buffer = al.alignedAlloc(u32, .@"4", num_commands + 1) catch unreachable;
-    // first word is the header.
+fn allocateGp0Packet(al: std.mem.Allocator, num_commands: u8) DmaPacket {
+    // No more than 16 command words are sent to the GPU at once, as
+    // sending larger packets may overrun the GP0 command FIFO and result in
+    // corrupted data.
+    if (num_commands > dma_max_chunk_size) {
+        std.debug.panic("packet > 16 words", .{});
+    }
+
+    // Allocate memory. We need to allocate an extra word for the packet header
+    // The DMA must read from 4-byte aligned boundaries.
+    const buffer = al.alignedAlloc(u32, .@"4", num_commands + 1) catch {
+        std.debug.panic("OOM on packet alloc", .{});
+    };
+    // First word is the header, and we'll set the length while we're here.
     const header_ptr: *gpuc.DmaTag = @ptrCast(buffer.ptr);
-    // we'll set the length as well while we're here.
     header_ptr.len = num_commands;
-    // the remainder of the buffer is the data.
+    // The remainder of the buffer is the data.
     return .{
         .header = header_ptr,
         .data = buffer[1..],
@@ -151,6 +159,11 @@ pub fn main() noreturn {
         std.log.info("Using NTSC mode", .{});
         setupGpu(.ntsc, screen_width, screen_height);
     }
+
+    // just testing
+    std.log.info("wow {x}", .{psx.PCSX_REDUX_ID.*});
+
+    psx.PCSX_MESSAGE.* = @constCast("hello test");
 
     var x: i16 = 0;
     var dx: i16 = 1;

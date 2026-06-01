@@ -10,10 +10,12 @@ const psx = @import("ps1").registers;
 // Comptime in this case tells the compiler the import is required
 // for its side effects (i.e. adding the symbols).
 // Theoretically we could also get these by including Zig's compiler-rt
-// library, but it doesn't currently support MIPS-I as far as I can tell.
+// library, but it doesn't currently support MIPS-I.
 comptime {
     _ = @import("runtime").mem;
 }
+
+// TODO: panic function
 
 // This sets the log function used by, e.g. std.log to our custom log
 // function which writes to SIO1. The implementation is in runtime/logging.zig and
@@ -40,8 +42,14 @@ export fn __start() noreturn {
     @memset(bss_start[0..len], 0);
 
     // Set interrupt masks to disable all by default.
-    // Note that IRQ_STAT still gets set; this is just to stop handlers.
+    // Note that IRQ_STAT still gets set; this is just to stop service routines from running.
     psx.IRQ_MASK.* = @bitCast(@as(u32, 0));
+
+    // Expand the addressable memory of Expansion Region 2 to 256 bytes.
+    // The PCSX-Redux emulator places debug registers outside the default 128 bytes set.
+    if (psx.SBUS_DEV8_CTRL.addr_bits < 8) {
+        psx.SBUS_DEV8_CTRL.addr_bits = 8;
+    }
 
     main_module.main();
 }

@@ -24,6 +24,10 @@ comptime {
 //
 // The default log function will attempt to write to stderr, which
 // doesn't exist.
+//
+// TIP: if you are using PCSX-Redux, you can swap this out for a version in
+// the runtime/pcsx module that prints to the PCSX-Redux console instead!
+// const pcsx = @import("runtime").pcsx;
 pub const std_options: std.Options = .{
     .logFn = logging.logFn,
 };

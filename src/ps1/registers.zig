@@ -257,8 +257,9 @@ pub var GPU_GP0: *volatile u32 = @ptrFromInt(KSEG1 + 0x1F80_1810);
 // MEMORY CTRL //
 // // // // // //
 // From the docs:
-// The Memory Control registers are initialized by the BIOS, and, normally software doesn't need to change that settings.
-// Some registers are useful for expansion hardware (allowing to increase the memory size and bus width).
+// "The Memory Control registers are initialized by the BIOS, and, normally software doesn't need to change that settings.
+// Some registers are useful for expansion hardware (allowing to increase the memory size and bus width)."
+//
 // I've only defined the one register we touch.
 
 pub const Expansion2Control = packed struct(u32) {
@@ -278,9 +279,6 @@ pub const SBUS_DEV8_CTRL: *volatile Expansion2Control = @ptrFromInt(KSEG1 + 0x1f
 
 /// 1F802080h 4 Redux-Expansion ID "PCSX" (R)
 pub const PCSX_REDUX_ID: *volatile u32 = @ptrFromInt(KSEG1 + 0x1F80_2080);
-
-/// "PCSX"
-pub const PCSX_ID = 0x58534350;
 
 /// 1F802080h 1 Redux-Expansion Console putchar (W)
 pub var PCSX_CONSOLE_PUTCHAR: *volatile u8 = @ptrFromInt(KSEG1 + 0x1F80_2080);

@@ -36,6 +36,7 @@ const logging = @import("runtime").logging;
 const psx = @import("ps1").registers;
 const gpuc = @import("ps1").gpu_cmd;
 const gpu = @import("runtime").gpu;
+const pcsx = @import("runtime").pcsx;
 
 const screen_width: u10 = 320;
 const screen_height = 240;
@@ -159,11 +160,6 @@ pub fn main() noreturn {
         std.log.info("Using NTSC mode", .{});
         setupGpu(.ntsc, screen_width, screen_height);
     }
-
-    // just testing
-    std.log.info("wow {x}", .{psx.PCSX_REDUX_ID.*});
-
-    psx.PCSX_MESSAGE.* = @constCast("hello test");
 
     var x: i16 = 0;
     var dx: i16 = 1;

@@ -51,5 +51,9 @@ export fn __start() noreturn {
         psx.SBUS_DEV8_CTRL.addr_bits = 8;
     }
 
+    // TODO: handle global constructors
+
     main_module.main();
+
+    // TODO: handle global destructors
 }

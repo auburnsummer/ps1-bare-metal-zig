@@ -83,39 +83,37 @@ SECTIONS {
 		_dataStart = .;
 
 		*(.data .data.* .gnu.linkonce.d.*)
-	} > APP_RAM
-
-	/*
-	 * Set _gp (copied to $gp) to point to the beginning of .sdata plus 0x8000,
-	 * so anything within .sdata and .sbss can be accessed using the $gp
-	 * register as base plus a signed 16-bit immediate.
-	 */
-	.sdata : {
-		_gp = ALIGN(16) + 0x7ff0;
-
-		*(.sdata .sdata.* .gnu.linkonce.s.*)
 
 		_dataEnd = .;
 	} > APP_RAM
+
+	.sdata : {
+		*(.sdata .sdata.* .gnu.linkonce.s.*)
+	} > APP_RAM
+	/*
+	 * We don't support $gp as a global pointer (i.e. -mno-abicalls)
+	 */
+	ASSERT(SIZEOF(.sdata) == 0, "ERROR: .sdata is non-empty.")
 
 	/*
 	 * Ensure the entire BSS region is aligned at both ends in order to allow
 	 * for fast clearing.
 	 */
-	.sbss (NOLOAD) : ALIGN(4) {
+	.bss (NOLOAD) : ALIGN(4) {
 		_bssStart = .;
 
-		*(.sbss .sbss.* .gnu.linkonce.sb.*)
-		*(.scommon)
-	} > APP_RAM
-
-	.bss (NOLOAD) : {
 		*(.bss .bss.* .gnu.linkonce.b.*)
 		*(COMMON)
 
 		.       = ALIGN(4);
 		_bssEnd = .;
 	} > APP_RAM
+
+	.sbss (NOLOAD) : {
+		*(.sbss .sbss.* .gnu.linkonce.sb.*)
+		*(.scommon)
+	} > APP_RAM
+	ASSERT(SIZEOF(.sbss) == 0, "ERROR: .sbss is non-empty.")
 
 	/* Dummy sections */
 

@@ -75,8 +75,6 @@ pub fn main() noreturn {
     // each register is commented with its address in the PS1. You can
     // look them up at https://psx-spx.consoledev.net/ which gives a
     // description of each bit.
-    // NOTE: see the SIO_MODE write above for why the type is named
-    // explicitly instead of using an anonymous struct literal.
     psx.SIO_CTRL(1).* = psx.SerialIoControl{
         .tx_enable = true,
         .rx_enable = true,

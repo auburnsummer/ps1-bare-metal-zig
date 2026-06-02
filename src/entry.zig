@@ -56,6 +56,8 @@ export fn __start() noreturn {
     }
 
     // TODO: handle global constructors
+    // as far as I can tell, Zig doesn't emit global constructors. we could still
+    // theoretically link C code that does though.
 
     main_module.main();
 

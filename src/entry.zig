@@ -15,7 +15,12 @@ comptime {
     _ = @import("runtime").mem;
 }
 
-// TODO: panic function
+// Custom panic handler. https://ziglang.org/documentation/master/#Panic-Handler
+pub const panic = std.debug.FullPanic(myPanic);
+fn myPanic(msg: []const u8, first_trace_addr: ?usize) noreturn {
+    std.log.info("Panic! {s}, addr: {x}\n", .{ msg, first_trace_addr orelse @returnAddress() });
+    while (true) {}
+}
 
 // This sets the log function used by, e.g. std.log to our custom log
 // function which writes to SIO1. The implementation is in runtime/logging.zig and

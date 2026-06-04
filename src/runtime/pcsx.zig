@@ -23,7 +23,7 @@ pub fn pcsxBreak() void {
     psx.PCSX_DEBUG_BREAK.* = 0;
 }
 
-pub fn pcsxMessage(s: [*:0]u8) void {
+pub fn pcsxMessage(s: [*:0]const u8) void {
     psx.PCSX_MESSAGE.* = s;
 }
 const MAXIMUM_LOG_SIZE = 80;

@@ -66,3 +66,17 @@ The second one does a single write as expected because the entire struct is inst
 before its written.
 
 It's related to Zig's "result location semantics", which should go away with Zig 0.18 see codeberg.org/ziglang/zig/issues/32009 
+
+### ...so should I use Zig to make PS1 games?
+
+I wouldn't recommend it at the moment, setting up Zig to compile to MIPS-I is very hacky,
+and I'm uncertain how stable
+LLVM's support for MIPS-I is. I've already ran into one LLVM MIPS-I bug (it can emit
+`teq`) and there may be more that I haven't ran into yet.
+
+It's also possible (although I haven't looked into it yet), that the generated MIPS machine
+code from Zig/LLVM is slower / missing optimisations compared to a C toolchain.
+
+For actually being productive in making a game, the best options are [psyqo](https://github.com/grumpycoders/pcsx-redux/blob/main/src/mips/psyqo/GETTING_STARTED.md) (a C++ SDK)
+
+or just go with C using [ps1-bare-metal][1] as a guide.

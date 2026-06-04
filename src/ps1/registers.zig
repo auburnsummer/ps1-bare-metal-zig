@@ -101,6 +101,19 @@ pub fn DMA_MADR(comptime n: DmaChannelName) *volatile DmaBaseAddress {
     return @ptrFromInt(KSEG1 + 0x1F80_1080 + (0x10 * @as(u32, @intFromEnum(n))));
 }
 
+pub const DmaBlockControlMode0 = packed struct(u32) {
+    num_words: u16,
+    _padding: u16 = 0,
+};
+pub const DmaBlockControlMode1 = packed struct(u32) {
+    chunk_size: u16,
+    num_chunks: u16,
+};
+/// 1F801084h+N*10h - D#_BCR - DMA Block Control (Channel 0..6) (R/W)
+pub fn DMA_BCR(comptime n: DmaChannelName) *volatile u32 {
+    return @ptrFromInt(KSEG1 + 0x1f80_1084 + (0x10 * @as(u32, @intFromEnum(n))));
+}
+
 // // // // // //
 // Serial I/O  //
 // // // // // //
@@ -224,7 +237,7 @@ pub const GpuStat = packed struct(u32) {
     };
     texpage_x_base: u4 = 0,
     texpage_y_base_1: u1 = 0,
-    transparency: gpu.SemiTransparency = .avg,
+    transparency: gpu.BlendMode = .avg,
     texpage_colors: gpu.TexpageColors = .bits_4,
     dither: bool = false,
     unlock_fb: bool = false,
@@ -290,4 +303,4 @@ pub var PCSX_DEBUG_BREAK: *volatile u8 = @ptrFromInt(KSEG1 + 0x1f80_2081);
 pub var PCSX_EXIT: *volatile u8 = @ptrFromInt(KSEG1 + 0x1f80_2082);
 
 /// 1F802084h 4 Redux-Expansion Notification message pointer (W)
-pub var PCSX_MESSAGE: *align(4) volatile [*:0]u8 = @ptrFromInt(KSEG1 + 0x1f80_2084);
+pub var PCSX_MESSAGE: *align(4) volatile [*:0]const u8 = @ptrFromInt(KSEG1 + 0x1f80_2084);

@@ -158,7 +158,7 @@ pub fn getGpuClockMultipleV(v_res: VerticalResolution) u32 {
     };
 }
 
-pub const SemiTransparency = enum(u2) {
+pub const BlendMode = enum(u2) {
     avg,
     add,
     subtract,
@@ -168,18 +168,38 @@ pub const SemiTransparency = enum(u2) {
 pub const TexpageColors = enum(u2) {
     bits_4,
     bits_8,
-    bits_15,
+    bits_16,
     _reserved,
 };
 
 pub const TexpageAttribute = packed struct(u12) {
     x_base: u4 = 0,
     y_base_1: u1 = 0,
-    transparency: SemiTransparency = .avg,
+    blend_mode: BlendMode = .avg,
     colors: TexpageColors = .bits_4,
     _padding: u2 = 0,
     y_base_2: u1 = 0,
 };
+
+pub const ClutAttribute = packed struct(u16) {
+    x: u6,
+    y: u10,
+};
+
+pub fn gp0Texpage(
+    x: u4,
+    y: u2,
+    blend_mode: BlendMode,
+    colors: TexpageColors,
+) TexpageAttribute {
+    return .{
+        .x_base = x,
+        .y_base_1 = @truncate(y & 1),
+        .blend_mode = blend_mode,
+        .colors = colors,
+        .y_base_2 = @truncate((y & 2) >> 1),
+    };
+}
 
 /// GP0(E1h) - Draw Mode setting (aka "Texpage")
 pub fn gp0SetPage(page: TexpageAttribute, dither: bool, unlock_fb: bool) u32 {
@@ -238,6 +258,15 @@ const RgbColor = packed struct(u24) {
     b: u8,
 };
 
+// 01h - Flush Cache
+pub fn gp0FlushCache() u32 {
+    const Cmd = packed struct(u32) {
+        _padding: u24 = 0,
+        _cmd: u8 = 0x01,
+    };
+    return @bitCast(Cmd{});
+}
+
 /// 02h - Quick Rectangle Fill
 pub fn gp0VramFill(color: RgbColor) u32 {
     const Cmd = packed struct(u32) {
@@ -268,6 +297,24 @@ pub fn gp0Rgb(color: RgbColor) u32 {
 /// Bitwise the same as gp0XY, just for semantic reasons.
 pub fn gp0WidthHeight(width: u16, height: u16) u32 {
     return gp0XY(width, height);
+}
+
+pub fn gp0UV(u: u8, v: u8) u32 {
+    const Cmd = packed struct(u32) {
+        u: u8,
+        v: u8,
+        _padding: u16 = 0, // TODO: CLUT or page instead of padding
+    };
+    return @bitCast(Cmd{ .u = u, .v = v });
+}
+
+pub fn gp0UvClut(u: u8, v: u8, clut: ClutAttribute) u32 {
+    const Cmd = packed struct(u32) {
+        u: u8,
+        v: u8,
+        clut: ClutAttribute,
+    };
+    return @bitCast(Cmd{ .u = u, .v = v, .clut = clut });
 }
 
 pub fn gp0Polygon(
@@ -324,4 +371,19 @@ pub fn gp0Rectangle(color: RgbColor, unshaded: bool, blend: bool, textured: bool
         .textured = textured,
         .size = size,
     });
+}
+
+/// https://psx-spx.consoledev.net/graphicsprocessingunitgpu/#vram-to-vram-blitting-command-4-100
+const MemoryTransferMode = enum(u3) {
+    blit = 0b100,
+    write = 0b101,
+    read = 0b110,
+};
+
+pub fn gp0MemoryTransferMode(mode: MemoryTransferMode) u32 {
+    const Cmd = packed struct(u32) {
+        _padding: u29 = 0,
+        cmd: MemoryTransferMode,
+    };
+    return @bitCast(Cmd{ .cmd = mode });
 }

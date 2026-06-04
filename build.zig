@@ -32,6 +32,8 @@ pub fn build(b: *std.Build) void {
     addExample(b, check, target, optimize, ps1_mod, runtime_mod, "01_basicGraphics");
     addExample(b, check, target, optimize, ps1_mod, runtime_mod, "02_doubleBuffer");
     addExample(b, check, target, optimize, ps1_mod, runtime_mod, "03_dmaChain");
+    addExample(b, check, target, optimize, ps1_mod, runtime_mod, "04_textures");
+    addExample(b, check, target, optimize, ps1_mod, runtime_mod, "05_palettes");
 }
 
 fn addExample(

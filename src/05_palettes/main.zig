@@ -13,23 +13,23 @@
 // THER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 // PERFORMANCE OF THIS SOFTWARE.
 
-// /*
-//  * This is a version of the previous example modified to use an indexed color
-//  * texture instead of a raw one. The idea behind indexed color images is
-//  * remarkably simple: by limiting the maximum number of unique colors in an
-//  * image and storing their values separately, it is possible to reduce the size
-//  * of the image data by replacing each pixel with an index to its color into the
-//  * so-called CLUT (color lookup table) or palette.
-//  *
-//  * The PS1's GPU supports two indexed color formats: 4 bits per pixel (up to 16
-//  * colors) and 8 bits per pixel (up to 256 colors). 4bpp and 8bpp textures are
-//  * stored in VRAM "squished" horizontally, taking up half or a quarter of the
-//  * size of an equivalent 16bpp texture respectively. Palettes are simply 16x1 or
-//  * 256x1 16bpp images that can be placed anywhere in VRAM, with some minimal
-//  * restrictions on alignment (their X coordinate must be a multiple of 16). This
-//  * example shows how to upload a palette to VRAM alongside the image and set the
-//  * appropriate GP0 attributes in order to let the GPU find and use it.
-//  */
+//
+// This is a version of the previous example modified to use an indexed color
+// texture instead of a raw one. The idea behind indexed color images is
+// remarkably simple: by limiting the maximum number of unique colors in an
+// image and storing their values separately, it is possible to reduce the size
+// of the image data by replacing each pixel with an index to its color into the
+// so-called CLUT (color lookup table) or palette.
+//
+// The PS1's GPU supports two indexed color formats: 4 bits per pixel (up to 16
+// colors) and 8 bits per pixel (up to 256 colors). 4bpp and 8bpp textures are
+// stored in VRAM "squished" horizontally, taking up half or a quarter of the
+// size of an equivalent 16bpp texture respectively. Palettes are simply 16x1 or
+// 256x1 16bpp images that can be placed anywhere in VRAM, with some minimal
+// restrictions on alignment (their X coordinate must be a multiple of 16). This
+// example shows how to upload a palette to VRAM alongside the image and set the
+// appropriate GP0 attributes in order to let the GPU find and use it.
+//
 
 const std = @import("std");
 const logging = @import("runtime").logging;

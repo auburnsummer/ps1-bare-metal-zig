@@ -236,7 +236,7 @@ pub fn main() noreturn {
     }
 
     const texture = uploadTexture(
-        texture_data,
+        &texture_data,
         @truncate(screen_width * 2),
         0,
         texture_width,

@@ -34,7 +34,9 @@
 //
 const std = @import("std");
 const gpu = @import("runtime").gpu;
+const logging = @import("runtime").logging;
 const gpuc = @import("ps1").gpu_cmd;
+const psx = @import("ps1").registers;
 
 // In order to pick sprites (characters) out of our spritesheet, we need a table
 // listing all of them (in ASCII order in this case) with their UV coordinates
@@ -150,6 +152,12 @@ const font_space_width = 4;
 const font_tab_width = 32;
 const font_line_height = 10;
 
+const screen_width = 320;
+const screen_height = 240;
+const font_width = 96;
+const font_height = 56;
+const font_color_depth: gpuc.TexpageColors = .bits_4;
+
 pub fn printString(
     arena: std.mem.Allocator,
     font: gpu.TextureInfo,
@@ -163,8 +171,8 @@ pub fn printString(
     // Start by sending a texture page command to tell the GPU to use the font's
     // spritesheet. The page setting persists when drawing rectangles, so
     // sending it here just once is enough.
-    const packet_1 = gpu.allocateGp0Packet(arena, 1);
-    packet_1.data[0] = gpuc.gp0SetPage(font.page, false, false);
+    var prev = gpu.allocateGp0Packet(arena, 1);
+    prev.data[0] = gpuc.gp0SetPage(font.page, false, false);
 
     for (s) |ch| {
         // Check if the character is "special" and shall be handled without
@@ -194,12 +202,29 @@ pub fn printString(
         // VRAM to those of the sprite itself within the sheet. Enable blending
         // to make sure any semitransparent pixels in the font get rendered
         // correctly.
-        const packet_2 = gpu.allocateGp0Packet(arena, 4);
-        packet_1.header.next = @truncate(@intFromPtr(packet_2.header));
-        // hmm
+        const packet = gpu.allocateGp0Packet(arena, 4);
+        prev.header.next = @truncate(@intFromPtr(packet.header));
+        packet[0] = gpuc.gp0Rectangle(.{ .r = 0, .g = 0, .b = 0 }, true, true, true);
+        packet[1] = gpuc.gp0XY(current_x, current_y);
+        packet[2] = gpuc.gp0UvClut(font.u + sprite.x, font.v + sprite.y, font.clut);
+        packet[3] = gpuc.gp0XY(sprite.width, sprite.height);
+
+        current_x += sprite.width;
+
+        prev = packet;
     }
 }
 
 pub fn main() noreturn {
+    logging.initSerialIo();
+
+    if (psx.GPU_STAT.video_mode == .pal) {
+        std.log.info("Using PAL mode", .{});
+        gpu.setupGpu(.pal, screen_width, screen_height);
+    } else {
+        std.log.info("Using NTSC mode", .{});
+        gpu.setupGpu(.ntsc, screen_width, screen_height);
+    }
+
     while (true) {}
 }

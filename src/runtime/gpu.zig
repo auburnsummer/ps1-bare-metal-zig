@@ -10,6 +10,44 @@ pub fn waitForGp0Ready() void {
     while (!psx.GPU_STAT.cmd_ready) {}
 }
 
+pub fn setupGpu(
+    mode: gpuc.VideoMode,
+    width: u32,
+    height: u32,
+) void {
+    const x: u32 = 0x760;
+    const y: u32 = if (mode == .pal) 0xa3 else 0x88;
+
+    const h_res: gpuc.HorizontalResolution = .res_320;
+    const v_res: gpuc.VerticalResolution = .res_240;
+
+    const offset_x = (width * gpuc.getGpuClockMultiplerH(h_res)) / 2;
+    const offset_y = (height / gpuc.getGpuClockMultipleV(v_res)) / 2;
+
+    psx.GPU_GP1.* = gpuc.gp1ResetGpu();
+    psx.GPU_GP1.* = gpuc.gp1FbRangeH(
+        @truncate(x - offset_x),
+        @truncate(x + offset_x),
+    );
+    psx.GPU_GP1.* = gpuc.gp1FbRangeV(
+        @truncate(y - offset_y),
+        @truncate(y + offset_y),
+    );
+    psx.GPU_GP1.* = gpuc.gp1FbMode(
+        h_res,
+        v_res,
+        mode,
+        false,
+        .bits_15,
+    );
+    psx.GPU_GP1.* = gpuc.gp1Blank(false);
+
+    psx.DMA_DPCR.gpu.enable = true;
+    psx.DMA_CHCR(.gpu).* = @bitCast(@as(u32, 0));
+
+    psx.GPU_GP1.* = gpuc.gp1DmaRequestMode(.cpu_to_gp0);
+}
+
 pub const TextureInfo = struct {
     u: u8 = 0,
     v: u8 = 0,

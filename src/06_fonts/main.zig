@@ -49,7 +49,8 @@ pub const SpriteInfo = struct {
     width: u8,
     height: u8,
 };
-const font_sprites: [*]SpriteInfo = .{
+
+const font_sprites: [95]SpriteInfo = .{
     .{ .x = 6, .y = 0, .width = 2, .height = 9 }, // !
     .{ .x = 12, .y = 0, .width = 4, .height = 9 }, // "
     .{ .x = 18, .y = 0, .width = 6, .height = 9 }, // #
@@ -147,7 +148,7 @@ const font_sprites: [*]SpriteInfo = .{
     .{ .x = 90, .y = 45, .width = 6, .height = 9 }, // Invalid character
 };
 
-const font_first_table_char = "!";
+const font_first_table_char: u8 = '!';
 const font_space_width = 4;
 const font_tab_width = 32;
 const font_line_height = 10;
@@ -158,12 +159,18 @@ const font_width = 96;
 const font_height = 56;
 const font_color_depth: gpuc.TexpageColors = .bits_4;
 
+const texture_data align(4) = @embedFile("./generated/texture.bin").*;
+const palette_data align(4) = @embedFile("./generated/palette.bin").*;
+
+const DmaChain = struct { first: gpu.DmaPacket, curr: gpu.DmaPacket };
+
 pub fn printString(
     arena: std.mem.Allocator,
+    chain: *DmaChain,
     font: gpu.TextureInfo,
     x: u16,
     y: u16,
-    s: []u8,
+    s: []const u8,
 ) void {
     var current_x = x;
     var current_y = y;
@@ -174,10 +181,15 @@ pub fn printString(
     var prev = gpu.allocateGp0Packet(arena, 1);
     prev.data[0] = gpuc.gp0SetPage(font.page, false, false);
 
+    chain.curr.header.next = @truncate(@intFromPtr(prev.header));
+
+    chain.curr = prev;
+
     for (s) |ch| {
         // Check if the character is "special" and shall be handled without
         // drawing any sprite, or if it's invalid and should be rendered as a
         // box with a question mark (character code 127).
+        var char = ch;
         switch (ch) {
             '\t' => {
                 current_x += font_tab_width - 1;
@@ -191,29 +203,34 @@ pub fn printString(
                 current_x += font_space_width;
             },
             '\x80'...'\xff' => {
-                ch = '\x7f';
+                char = '\x7f';
+            },
+            else => {
+                continue;
             },
         }
         // If the character was not a tab, newline or space, fetch its
         // respective entry from the sprite coordinate table.
-        const sprite = font_sprites[ch - font_first_table_char];
+        const sprite = font_sprites[char - font_first_table_char];
 
         // Draw the character, summing the UV coordinates of the spritesheet in
         // VRAM to those of the sprite itself within the sheet. Enable blending
         // to make sure any semitransparent pixels in the font get rendered
         // correctly.
         const packet = gpu.allocateGp0Packet(arena, 4);
-        prev.header.next = @truncate(@intFromPtr(packet.header));
-        packet[0] = gpuc.gp0Rectangle(.{ .r = 0, .g = 0, .b = 0 }, true, true, true);
-        packet[1] = gpuc.gp0XY(current_x, current_y);
-        packet[2] = gpuc.gp0UvClut(font.u + sprite.x, font.v + sprite.y, font.clut);
-        packet[3] = gpuc.gp0XY(sprite.width, sprite.height);
+        chain.curr.header.next = @truncate(@intFromPtr(packet.header));
+        packet.data[0] = gpuc.gp0Rectangle(.{ .r = 0, .g = 0, .b = 0 }, true, true, true, .px_variable);
+        packet.data[1] = gpuc.gp0XY(current_x, current_y);
+        packet.data[2] = gpuc.gp0UvClut(font.u + sprite.x, font.v + sprite.y, font.clut);
+        packet.data[3] = gpuc.gp0XY(sprite.width, sprite.height);
 
         current_x += sprite.width;
 
-        prev = packet;
+        chain.curr = packet;
     }
 }
+
+var buf: [gpu.gpa_chain_buffer_size]u8 align(4) = undefined;
 
 pub fn main() noreturn {
     logging.initSerialIo();
@@ -226,5 +243,24 @@ pub fn main() noreturn {
         gpu.setupGpu(.ntsc, screen_width, screen_height);
     }
 
-    while (true) {}
+    const texture = gpu.uploadIndexedTexture(
+        &texture_data,
+        &palette_data,
+        @truncate(screen_width * 2),
+        0,
+        screen_width * 2,
+        font_height,
+        font_width,
+        font_height,
+        .bits_4,
+    );
+
+    while (true) {
+        var fba: std.heap.FixedBufferAllocator = .init(&buf);
+        const first_packet = gpu.allocateGp0Packet(fba.allocator(), 0);
+        var chain = DmaChain{ .first = first_packet, .curr = first_packet };
+        printString(fba.allocator(), &chain, texture, 20, 20, "Hello World!");
+
+        gpu.sendGpuLinkedList(@ptrCast(chain.first.header));
+    }
 }

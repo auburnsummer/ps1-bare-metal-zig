@@ -27,7 +27,8 @@ all: build/00_helloWorld.psexe\
 	build/02_doubleBuffer.psexe\
 	build/03_dmaChain.psexe\
 	build/04_textures.psexe \
-	build/05_palettes.psexe
+	build/05_palettes.psexe \
+	build/06_fonts.psexe
 
 .DEFAULT_GOAL := all
 
@@ -99,7 +100,7 @@ build/04_textures.elf: $(shell find -L src/04_textures src/ps1 src/runtime src/e
 build/04_textures.psexe: build/04_textures.elf
 	uv run ./tools/convertExecutable.py build/04_textures.elf build/04_textures.psexe
 
-src/05_palettes/generated/palette.bin: src/05_palettes/texture.png
+src/05_palettes/generated/palette.bin src/05_palettes/generated/texture.bin: src/05_palettes/texture.png
 	uv run ./tools/convertImage.py --bpp=4 src/05_palettes/texture.png src/05_palettes/generated/texture.bin src/05_palettes/generated/palette.bin
 
 build/05_palettes.elf: $(shell find -L src/05_palettes src/ps1 src/runtime src/entry.zig -type f) src/05_palettes/generated/texture.bin src/05_palettes/generated/palette.bin
@@ -114,3 +115,19 @@ build/05_palettes.elf: $(shell find -L src/05_palettes src/ps1 src/runtime src/e
 
 build/05_palettes.psexe: build/05_palettes.elf
 	uv run ./tools/convertExecutable.py build/05_palettes.elf build/05_palettes.psexe
+
+src/06_fonts/generated/texture.bin src/06_fonts/generated/palette.bin: src/06_fonts/font.png
+	uv run ./tools/convertImage.py --bpp=4 src/06_fonts/font.png src/06_fonts/generated/texture.bin src/06_fonts/generated/palette.bin
+
+build/06_fonts.elf: $(shell find -L src/06_fonts src/ps1 src/runtime src/entry.zig -type f) src/06_fonts/generated/texture.bin src/06_fonts/generated/palette.bin
+	zig build-exe \
+		$(ZIG_FLAGS) \
+		$(ENTRY_MODULE) \
+		--dep ps1 --dep runtime \
+		-Mmain=./src/06_fonts/main.zig \
+		$(SHARED_MODULES) \
+		--script ./build_helpers/executable.ld \
+		-femit-bin=build/06_fonts.elf
+
+build/06_fonts.psexe: build/06_fonts.elf
+	uv run ./tools/convertExecutable.py build/06_fonts.elf build/06_fonts.psexe

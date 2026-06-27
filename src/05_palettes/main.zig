@@ -236,6 +236,18 @@ fn allocateGp0Packet(al: std.mem.Allocator, num_commands: u8) DmaPacket {
     };
 }
 
+const DmaChain = struct {
+    arena: *std.mem.Allocator,
+    first: *DmaPacket,
+    last: *DmaPacket,
+    fn newPacket(self: *DmaChain, num_commands: u8) DmaPacket {
+        const pkt = allocateGp0Packet(self.arena, num_commands);
+        self.last.header.next.* = @truncate(@intFromPtr(pkt.header));
+        self.last.* = &pkt;
+        return pkt;
+    }
+};
+
 fn sendGpuLinkedList(ptr: *u32) void {
     waitForGpuDmaDone();
     psx.DMA_MADR(.gpu).addr = @truncate(@intFromPtr(ptr));

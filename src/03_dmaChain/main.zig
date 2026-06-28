@@ -100,8 +100,40 @@ fn clip(x: i16) u16 {
 
 /// Holds a pointer to the header and data sections of a packet.
 /// The header and the data should be adjacent in memory, so
-/// use allocateGp0Packet to make one of these.
-const DmaPacket = struct { header: *gpuc.DmaTag, data: []u32 };
+/// use DmaPacket.init to make one of these.
+const DmaPacket = struct {
+    header: *gpuc.DmaTag,
+    data: []u32,
+    fn init(arena: std.mem.Allocator, num_commands: u8) DmaPacket {
+        // No more than 16 command words are sent to the GPU at once, as
+        // sending larger packets may overrun the GP0 command FIFO and result in
+        // corrupted data.
+        debug.assert(num_commands <= dma_max_chunk_size, "packet > 16 words");
+
+        // Allocate memory. We need to allocate an extra word for the packet header
+        // The DMA must read from 4-byte aligned boundaries.
+        const buffer = arena.alignedAlloc(u32, .@"4", num_commands + 1) catch {
+            std.debug.panic("OOM on packet alloc", .{});
+        };
+        // First word in the buffer the header, and we'll set the length while we're here.
+        const header_ptr: *gpuc.DmaTag = @ptrCast(buffer.ptr);
+        header_ptr.len = num_commands;
+        // The remainder of the buffer is the data.
+        return .{
+            .header = header_ptr,
+            .data = buffer[1..],
+        };
+    }
+    /// Create a terminator packet, which tells the DMA to finish.
+    fn terminator(arena: std.mem.Allocator) DmaPacket {
+        const pkt: DmaPacket = .init(arena, 0);
+        pkt.header.next = 0xFFFFFF;
+        return pkt;
+    }
+    fn setNext(self: *const DmaPacket, next_packet: *const DmaPacket) void {
+        self.header.next = @truncate(@intFromPtr(next_packet.header));
+    }
+};
 
 const dma_max_chunk_size = 16;
 const gpa_chain_buffer_size = 1024 * 4;
@@ -110,27 +142,6 @@ const gpa_chain_buffer_size = 1024 * 4;
 // one for each framebuffer.
 var chain_1: [gpa_chain_buffer_size]u8 align(4) = undefined;
 var chain_2: [gpa_chain_buffer_size]u8 align(4) = undefined;
-
-fn allocateGp0Packet(al: std.mem.Allocator, num_commands: u8) DmaPacket {
-    // No more than 16 command words are sent to the GPU at once, as
-    // sending larger packets may overrun the GP0 command FIFO and result in
-    // corrupted data.
-    debug.assert(num_commands <= dma_max_chunk_size, "packet > 16 words");
-
-    // Allocate memory. We need to allocate an extra word for the packet header
-    // The DMA must read from 4-byte aligned boundaries.
-    const buffer = al.alignedAlloc(u32, .@"4", num_commands + 1) catch {
-        std.debug.panic("OOM on packet alloc", .{});
-    };
-    // First word is the header, and we'll set the length while we're here.
-    const header_ptr: *gpuc.DmaTag = @ptrCast(buffer.ptr);
-    header_ptr.len = num_commands;
-    // The remainder of the buffer is the data.
-    return .{
-        .header = header_ptr,
-        .data = buffer[1..],
-    };
-}
 
 fn sendGpuLinkedList(ptr: *u32) void {
     // Wait until the GPU's DMA unit has finished sending data and is ready.
@@ -189,7 +200,7 @@ pub fn main() noreturn {
         // up each command like this will make sure the DMA channel won't try to
         // send them too quickly and end up overflowing the GPU's internal
         // command processor.
-        const packet_1 = allocateGp0Packet(allocator, 4);
+        const packet_1: DmaPacket = .init(allocator, 4);
         packet_1.data[0] = gpuc.gp0SetPage(.{}, true, false);
         packet_1.data[1] = gpuc.gp0FbOffset1(frame_x, frame_y);
         packet_1.data[2] = gpuc.gp0FbOffset2(
@@ -199,16 +210,16 @@ pub fn main() noreturn {
         packet_1.data[3] = gpuc.gp0FbOrigin(frame_x, frame_y);
 
         // Next packet (grey background). Allocate it...
-        const packet_2 = allocateGp0Packet(allocator, 3);
+        const packet_2: DmaPacket = .init(allocator, 3);
         // Now we can point the header of the previous packet to this one.
-        packet_1.header.next = @truncate(@intFromPtr(packet_2.header));
+        packet_1.setNext(&packet_2);
         packet_2.data[0] = gpuc.gp0VramFill(.{ .r = 64, .g = 64, .b = 64 });
         packet_2.data[1] = gpuc.gp0XY(frame_x, frame_y);
         packet_2.data[2] = gpuc.gp0WidthHeight(screen_width, screen_height);
 
         // Next packet (yellow bouncing square.)
-        const packet_3 = allocateGp0Packet(allocator, 3);
-        packet_2.header.next = @truncate(@intFromPtr(packet_3.header));
+        const packet_3: DmaPacket = .init(allocator, 3);
+        packet_2.setNext(&packet_3);
         packet_3.data[0] = gpuc.gp0Rectangle(
             .{ .r = 255, .g = 255, .b = 0 },
             false,
@@ -221,10 +232,8 @@ pub fn main() noreturn {
 
         // Terminate the linked list by pointing the last packet to a terminator header:
         // a header with 0 length and next address 0xFFFFFF.
-        const packet_4 = allocateGp0Packet(allocator, 0);
-        packet_3.header.next = @truncate(@intFromPtr(packet_4.header));
-
-        packet_4.header.next = 0xFFFFFF;
+        const packet_4: DmaPacket = .terminator(allocator);
+        packet_3.setNext(&packet_4);
 
         // Update the position of the square.
         x = x +| dx;

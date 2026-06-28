@@ -77,6 +77,9 @@ LLVM's support for MIPS-I is. I've already ran into one LLVM MIPS-I bug (it can 
 It's also possible (although I haven't looked into it yet), that the generated MIPS machine
 code from Zig/LLVM is slower / missing optimisations compared to a C toolchain.
 
+I'm also a beginner at both Zig programming and PS1 programming, and as a result, my
+code is probably both non-idiomatic and non-optimal.
+
 For actually being productive in making a game, the best options are [psyqo](https://github.com/grumpycoders/pcsx-redux/blob/main/src/mips/psyqo/GETTING_STARTED.md) (a C++ SDK)
 
 or just go with C using [ps1-bare-metal][1] as a guide.

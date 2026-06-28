@@ -190,26 +190,39 @@ fn clip(x: i16) u16 {
     return @max(0, x);
 }
 
-const DmaPacket = struct { header: *gpuc.DmaTag, data: []u32 };
+const DmaPacket = struct {
+    header: *gpuc.DmaTag,
+    data: []u32,
+    fn init(arena: std.mem.Allocator, num_commands: u8) DmaPacket {
+        debug.assert(num_commands <= dma_max_chunk_size, "packet > 16 words");
+        const buffer = arena.alignedAlloc(u32, .@"4", num_commands + 1) catch {
+            std.debug.panic("OOM on packet alloc", .{});
+        };
+        // First word in the buffer the header, and we'll set the length while we're here.
+        const header_ptr: *gpuc.DmaTag = @ptrCast(buffer.ptr);
+        header_ptr.len = num_commands;
+        // The remainder of the buffer is the data.
+        return .{
+            .header = header_ptr,
+            .data = buffer[1..],
+        };
+    }
+    /// Create a terminator packet, which tells the DMA to finish.
+    fn terminator(arena: std.mem.Allocator) DmaPacket {
+        const pkt: DmaPacket = .init(arena, 0);
+        pkt.header.next = 0xFFFFFF;
+        return pkt;
+    }
+    fn setNext(self: *const DmaPacket, next_packet: *const DmaPacket) void {
+        self.header.next = @truncate(@intFromPtr(next_packet.header));
+    }
+};
 
 const dma_max_chunk_size = 16;
 const gpa_chain_buffer_size = 1024 * 4;
 
 var chain_1: [gpa_chain_buffer_size]u8 align(4) = undefined;
 var chain_2: [gpa_chain_buffer_size]u8 align(4) = undefined;
-
-fn allocateGp0Packet(al: std.mem.Allocator, num_commands: u8) DmaPacket {
-    debug.assert(num_commands <= dma_max_chunk_size, "packet > 16 words");
-    const buffer = al.alignedAlloc(u32, .@"4", num_commands + 1) catch {
-        std.debug.panic("OOM on packet alloc", .{});
-    };
-    const header_ptr: *gpuc.DmaTag = @ptrCast(buffer.ptr);
-    header_ptr.len = num_commands;
-    return .{
-        .header = header_ptr,
-        .data = buffer[1..],
-    };
-}
 
 fn sendGpuLinkedList(ptr: *u32) void {
     waitForGpuDmaDone();
@@ -261,7 +274,7 @@ pub fn main() noreturn {
         var fba: std.heap.FixedBufferAllocator = if (using_second_frame) .init(&chain_1) else .init(&chain_2);
         const allocator = fba.allocator();
 
-        const packet_1 = allocateGp0Packet(allocator, 4);
+        const packet_1: DmaPacket = .init(allocator, 4);
         packet_1.data[0] = gpuc.gp0SetPage(.{}, true, false);
         packet_1.data[1] = gpuc.gp0FbOffset1(frame_x, frame_y);
         packet_1.data[2] = gpuc.gp0FbOffset2(
@@ -270,8 +283,8 @@ pub fn main() noreturn {
         );
         packet_1.data[3] = gpuc.gp0FbOrigin(frame_x, frame_y);
 
-        const packet_2 = allocateGp0Packet(allocator, 3);
-        packet_1.header.next = @truncate(@intFromPtr(packet_2.header));
+        const packet_2: DmaPacket = .init(allocator, 3);
+        packet_1.setNext(&packet_2);
         packet_2.data[0] = gpuc.gp0VramFill(.{ .r = 64, .g = 64, .b = 64 });
         packet_2.data[1] = gpuc.gp0XY(frame_x, frame_y);
         packet_2.data[2] = gpuc.gp0WidthHeight(screen_width, screen_height);
@@ -286,8 +299,8 @@ pub fn main() noreturn {
         // inline page attribute and do not require a separate page setting
         // command (if not to toggle dithering, which the inline page field does
         // not affect).
-        const packet_3 = allocateGp0Packet(allocator, 5);
-        packet_2.header.next = @truncate(@intFromPtr(packet_3.header));
+        const packet_3: DmaPacket = .init(allocator, 5);
+        packet_2.setNext(&packet_3);
         packet_3.data[0] = gpuc.gp0SetPage(texture.page, true, false);
         packet_3.data[1] = gpuc.gp0Rectangle(
             .{ .r = 255, .g = 255, .b = 0 },
@@ -300,10 +313,8 @@ pub fn main() noreturn {
         packet_3.data[3] = gpuc.gp0UV(texture.u, texture.v);
         packet_3.data[4] = gpuc.gp0WidthHeight(32, 32);
 
-        const packet_4 = allocateGp0Packet(allocator, 0);
-        packet_3.header.next = @truncate(@intFromPtr(packet_4.header));
-
-        packet_4.header.next = 0xFFFFFF;
+        const packet_4: DmaPacket = .terminator(allocator);
+        packet_3.setNext(&packet_4);
 
         x = x +| dx;
         y = y +| dy;

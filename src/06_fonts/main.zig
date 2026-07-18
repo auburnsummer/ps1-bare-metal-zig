@@ -179,6 +179,7 @@ pub fn printString(
     packet.data[0] = gpuc.gp0SetPage(font.page, false, false);
 
     for (s) |ch| {
+        std.log.info("{c}", .{ch});
         // Check if the character is "special" and shall be handled without
         // drawing any sprite, or if it's invalid and should be rendered as a
         // box with a question mark (character code 127).
@@ -187,20 +188,22 @@ pub fn printString(
             '\t' => {
                 current_x += font_tab_width - 1;
                 current_x -= current_x % font_tab_width;
+                continue;
             },
             '\n' => {
                 current_x = x;
                 current_y += font_line_height;
+                continue;
             },
             ' ' => {
                 current_x += font_space_width;
+                continue;
             },
             '\x80'...'\xff' => {
                 char = '\x7f';
-            },
-            else => {
                 continue;
             },
+            else => {},
         }
         // If the character was not a tab, newline or space, fetch its
         // respective entry from the sprite coordinate table.
@@ -250,6 +253,8 @@ pub fn main() noreturn {
 
     var using_second_frame: bool = false;
 
+    var counter: usize = 0;
+
     while (true) {
         const frame_x: u10 = if (using_second_frame) screen_width else 0;
         const frame_y = 0;
@@ -287,11 +292,18 @@ pub fn main() noreturn {
 
         printString(&chain, texture, 5, 5, "Hello World!");
 
+        var buffer: [50]u8 = undefined;
+        const message = std.fmt.bufPrint(buffer[0..], "Current frame: {d}", .{counter}) catch unreachable;
+
+        printString(&chain, texture, 5, 15, message);
+
         chain.terminate();
 
         gpu.waitForGp0Ready();
         gpu.waitForVSync();
 
         gpu.sendGpuLinkedList(@ptrCast(chain.start.header));
+
+        counter = counter + 1;
     }
 }

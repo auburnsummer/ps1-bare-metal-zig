@@ -162,11 +162,8 @@ const font_color_depth: gpuc.TexpageColors = .bits_4;
 const texture_data align(4) = @embedFile("./generated/texture.bin").*;
 const palette_data align(4) = @embedFile("./generated/palette.bin").*;
 
-const DmaChain = struct { first: gpu.DmaPacket, curr: gpu.DmaPacket };
-
 pub fn printString(
-    arena: std.mem.Allocator,
-    chain: *DmaChain,
+    chain: *gpu.DmaChain,
     font: gpu.TextureInfo,
     x: u16,
     y: u16,
@@ -178,12 +175,8 @@ pub fn printString(
     // Start by sending a texture page command to tell the GPU to use the font's
     // spritesheet. The page setting persists when drawing rectangles, so
     // sending it here just once is enough.
-    var prev = gpu.allocateGp0Packet(arena, 1);
-    prev.data[0] = gpuc.gp0SetPage(font.page, false, false);
-
-    chain.curr.header.next = @truncate(@intFromPtr(prev.header));
-
-    chain.curr = prev;
+    var packet = chain.newPacket(1);
+    packet.data[0] = gpuc.gp0SetPage(font.page, false, false);
 
     for (s) |ch| {
         // Check if the character is "special" and shall be handled without
@@ -217,20 +210,20 @@ pub fn printString(
         // VRAM to those of the sprite itself within the sheet. Enable blending
         // to make sure any semitransparent pixels in the font get rendered
         // correctly.
-        const packet = gpu.allocateGp0Packet(arena, 4);
-        chain.curr.header.next = @truncate(@intFromPtr(packet.header));
+        packet = chain.newPacket(4);
         packet.data[0] = gpuc.gp0Rectangle(.{ .r = 0, .g = 0, .b = 0 }, true, true, true, .px_variable);
         packet.data[1] = gpuc.gp0XY(current_x, current_y);
         packet.data[2] = gpuc.gp0UvClut(font.u + sprite.x, font.v + sprite.y, font.clut);
         packet.data[3] = gpuc.gp0XY(sprite.width, sprite.height);
 
         current_x += sprite.width;
-
-        chain.curr = packet;
     }
 }
 
-var buf: [gpu.gpa_chain_buffer_size]u8 align(4) = undefined;
+const gpa_chain_buffer_size = 1024 * 4;
+
+var chain_1: [gpa_chain_buffer_size]u8 align(4) = undefined;
+var chain_2: [gpa_chain_buffer_size]u8 align(4) = undefined;
 
 pub fn main() noreturn {
     logging.initSerialIo();
@@ -255,12 +248,50 @@ pub fn main() noreturn {
         .bits_4,
     );
 
-    while (true) {
-        var fba: std.heap.FixedBufferAllocator = .init(&buf);
-        const first_packet = gpu.allocateGp0Packet(fba.allocator(), 0);
-        var chain = DmaChain{ .first = first_packet, .curr = first_packet };
-        printString(fba.allocator(), &chain, texture, 20, 20, "Hello World!");
+    var using_second_frame: bool = false;
 
-        gpu.sendGpuLinkedList(@ptrCast(chain.first.header));
+    while (true) {
+        const frame_x: u10 = if (using_second_frame) screen_width else 0;
+        const frame_y = 0;
+
+        using_second_frame = !using_second_frame;
+
+        psx.GPU_GP1.* = gpuc.gp1FbOffset(frame_x, frame_y);
+
+        var fba: std.heap.FixedBufferAllocator = if (using_second_frame) .init(&chain_1) else .init(&chain_2);
+        const allocator = fba.allocator();
+
+        var chain: gpu.DmaChain = .init(allocator);
+
+        var packet: gpu.DmaPacket = chain.newPacket(4);
+        packet.data[0] = gpuc.gp0SetPage(.{}, true, false);
+        packet.data[1] = gpuc.gp0FbOffset1(frame_x, frame_y);
+        packet.data[2] = gpuc.gp0FbOffset2(
+            frame_x + screen_width - 1,
+            frame_y + screen_height - 1,
+        );
+        packet.data[3] = gpuc.gp0FbOrigin(frame_x, frame_y);
+
+        packet = chain.newPacket(3);
+        packet.data[0] = gpuc.gp0VramFill(.{ .r = 64, .g = 64, .b = 64 });
+        packet.data[1] = gpuc.gp0XY(frame_x, frame_y);
+        packet.data[2] = gpuc.gp0WidthHeight(screen_width, screen_height);
+
+        packet = chain.newPacket(6);
+        packet.data[0] = gpuc.gp0ShadedTriangle(.{ .r = 255, .g = 0, .b = 0 }, true, false, false);
+        packet.data[1] = gpuc.gp0XY(screen_width / 2, 32);
+        packet.data[2] = gpuc.gp0Rgb(.{ .r = 0, .g = 255, .b = 0 });
+        packet.data[3] = gpuc.gp0XY(32, screen_height - 32);
+        packet.data[4] = gpuc.gp0Rgb(.{ .r = 0, .g = 0, .b = 255 });
+        packet.data[5] = gpuc.gp0XY(screen_width - 32, screen_height - 32);
+
+        printString(&chain, texture, 5, 5, "Hello World!");
+
+        chain.terminate();
+
+        gpu.waitForGp0Ready();
+        gpu.waitForVSync();
+
+        gpu.sendGpuLinkedList(@ptrCast(chain.start.header));
     }
 }

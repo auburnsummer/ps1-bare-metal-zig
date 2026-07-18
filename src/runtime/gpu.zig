@@ -57,8 +57,6 @@ pub const TextureInfo = struct {
     clut: gpuc.ClutAttribute,
 };
 
-pub const DmaPacket = struct { header: *gpuc.DmaTag, data: []u32 };
-
 pub fn allocateGp0Packet(al: std.mem.Allocator, num_commands: u8) DmaPacket {
     debug.assert(num_commands <= dma_max_chunk_size, "packet > 16 words");
     const buffer = al.alignedAlloc(u32, .@"4", num_commands + 1) catch {
@@ -74,6 +72,12 @@ pub fn allocateGp0Packet(al: std.mem.Allocator, num_commands: u8) DmaPacket {
 
 pub fn waitForGpuDmaDone() void {
     while (psx.DMA_CHCR(.gpu).enable) {}
+}
+
+pub fn waitForVSync() void {
+    while (!psx.IRQ_STAT.vblank) {}
+
+    psx.IRQ_STAT.vblank = false;
 }
 
 pub fn sendVramData(
@@ -189,3 +193,55 @@ pub fn sendGpuLinkedList(ptr: *u32) void {
         .enable = true,
     };
 }
+
+pub const DmaPacket = struct {
+    header: *gpuc.DmaTag,
+    data: []u32,
+    pub fn init(arena: std.mem.Allocator, num_commands: u8) DmaPacket {
+        debug.assert(num_commands <= dma_max_chunk_size, "packet > 16 words");
+        const buffer = arena.alignedAlloc(u32, .@"4", num_commands + 1) catch {
+            std.debug.panic("OOM on packet alloc", .{});
+        };
+        // First word in the buffer the header, and we'll set the length while we're here.
+        const header_ptr: *gpuc.DmaTag = @ptrCast(buffer.ptr);
+        header_ptr.len = num_commands;
+        // The remainder of the buffer is the data.
+        return .{
+            .header = header_ptr,
+            .data = buffer[1..],
+        };
+    }
+    /// Create a terminator packet, which tells the DMA to finish.
+    pub fn terminator(arena: std.mem.Allocator) DmaPacket {
+        const pkt: DmaPacket = .init(arena, 0);
+        pkt.header.next = 0xFFFFFF;
+        return pkt;
+    }
+    pub fn setNext(self: *const DmaPacket, next_packet: *const DmaPacket) void {
+        self.header.next = @truncate(@intFromPtr(next_packet.header));
+    }
+};
+
+pub const DmaChain = struct {
+    start: DmaPacket,
+    curr: DmaPacket,
+    arena: std.mem.Allocator,
+    pub fn init(arena: std.mem.Allocator) DmaChain {
+        const start: DmaPacket = .init(arena, 0);
+        return .{
+            .start = start,
+            .curr = start,
+            .arena = arena,
+        };
+    }
+    pub fn newPacket(self: *DmaChain, num_commands: u8) DmaPacket {
+        const new_packet: DmaPacket = .init(self.arena, num_commands);
+        self.curr.setNext(&new_packet);
+        self.curr = new_packet;
+        return new_packet;
+    }
+    pub fn terminate(self: *DmaChain) void {
+        const terminator: DmaPacket = .terminator(self.arena);
+        self.curr.setNext(&terminator);
+    }
+};

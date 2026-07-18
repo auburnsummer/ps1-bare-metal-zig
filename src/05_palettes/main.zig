@@ -215,7 +215,57 @@ fn clip(x: i16) u16 {
     return @max(0, x);
 }
 
-const DmaPacket = struct { header: *gpuc.DmaTag, data: []u32 };
+const DmaPacket = struct {
+    header: *gpuc.DmaTag,
+    data: []u32,
+    fn init(arena: std.mem.Allocator, num_commands: u8) DmaPacket {
+        debug.assert(num_commands <= dma_max_chunk_size, "packet > 16 words");
+        const buffer = arena.alignedAlloc(u32, .@"4", num_commands + 1) catch {
+            std.debug.panic("OOM on packet alloc", .{});
+        };
+        // First word in the buffer the header, and we'll set the length while we're here.
+        const header_ptr: *gpuc.DmaTag = @ptrCast(buffer.ptr);
+        header_ptr.len = num_commands;
+        // The remainder of the buffer is the data.
+        return .{
+            .header = header_ptr,
+            .data = buffer[1..],
+        };
+    }
+    /// Create a terminator packet, which tells the DMA to finish.
+    fn terminator(arena: std.mem.Allocator) DmaPacket {
+        const pkt: DmaPacket = .init(arena, 0);
+        pkt.header.next = 0xFFFFFF;
+        return pkt;
+    }
+    fn setNext(self: *const DmaPacket, next_packet: *const DmaPacket) void {
+        self.header.next = @truncate(@intFromPtr(next_packet.header));
+    }
+};
+
+const DmaChain = struct {
+    start: DmaPacket,
+    curr: DmaPacket,
+    arena: std.mem.Allocator,
+    fn init(arena: std.mem.Allocator) DmaChain {
+        const start: DmaPacket = .init(arena, 0);
+        return .{
+            .start = start,
+            .curr = start,
+            .arena = arena,
+        };
+    }
+    fn newPacket(self: *DmaChain, num_commands: u8) DmaPacket {
+        const new_packet: DmaPacket = .init(self.arena, num_commands);
+        self.curr.setNext(&new_packet);
+        self.curr = new_packet;
+        return new_packet;
+    }
+    fn terminate(self: *DmaChain) void {
+        const terminator: DmaPacket = .terminator(self.arena);
+        self.curr.setNext(&terminator);
+    }
+};
 
 const dma_max_chunk_size = 16;
 const gpa_chain_buffer_size = 1024 * 4;
@@ -235,18 +285,6 @@ fn allocateGp0Packet(al: std.mem.Allocator, num_commands: u8) DmaPacket {
         .data = buffer[1..],
     };
 }
-
-const DmaChain = struct {
-    arena: *std.mem.Allocator,
-    first: *DmaPacket,
-    last: *DmaPacket,
-    fn newPacket(self: *DmaChain, num_commands: u8) DmaPacket {
-        const pkt = allocateGp0Packet(self.arena, num_commands);
-        self.last.header.next.* = @truncate(@intFromPtr(pkt.header));
-        self.last.* = &pkt;
-        return pkt;
-    }
-};
 
 fn sendGpuLinkedList(ptr: *u32) void {
     waitForGpuDmaDone();
@@ -302,40 +340,38 @@ pub fn main() noreturn {
         var fba: std.heap.FixedBufferAllocator = if (using_second_frame) .init(&chain_1) else .init(&chain_2);
         const allocator = fba.allocator();
 
-        const packet_1 = allocateGp0Packet(allocator, 4);
-        packet_1.data[0] = gpuc.gp0SetPage(.{}, true, false);
-        packet_1.data[1] = gpuc.gp0FbOffset1(frame_x, frame_y);
-        packet_1.data[2] = gpuc.gp0FbOffset2(
+        var chain: DmaChain = .init(allocator);
+
+        var packet: DmaPacket = chain.newPacket(4);
+        packet.data[0] = gpuc.gp0SetPage(.{}, true, false);
+        packet.data[1] = gpuc.gp0FbOffset1(frame_x, frame_y);
+        packet.data[2] = gpuc.gp0FbOffset2(
             frame_x + screen_width - 1,
             frame_y + screen_height - 1,
         );
-        packet_1.data[3] = gpuc.gp0FbOrigin(frame_x, frame_y);
+        packet.data[3] = gpuc.gp0FbOrigin(frame_x, frame_y);
 
-        const packet_2 = allocateGp0Packet(allocator, 3);
-        packet_1.header.next = @truncate(@intFromPtr(packet_2.header));
-        packet_2.data[0] = gpuc.gp0VramFill(.{ .r = 64, .g = 64, .b = 64 });
-        packet_2.data[1] = gpuc.gp0XY(frame_x, frame_y);
-        packet_2.data[2] = gpuc.gp0WidthHeight(screen_width, screen_height);
+        packet = chain.newPacket(3);
+        packet.data[0] = gpuc.gp0VramFill(.{ .r = 64, .g = 64, .b = 64 });
+        packet.data[1] = gpuc.gp0XY(frame_x, frame_y);
+        packet.data[2] = gpuc.gp0WidthHeight(screen_width, screen_height);
 
         // Draw the sprite, almost identically to how we did it in the previous
         // example. Notice how the CLUT attribute is being passed to the GPU.
-        const packet_3 = allocateGp0Packet(allocator, 5);
-        packet_2.header.next = @truncate(@intFromPtr(packet_3.header));
-        packet_3.data[0] = gpuc.gp0SetPage(texture.page, true, false);
-        packet_3.data[1] = gpuc.gp0Rectangle(
+        packet = chain.newPacket(5);
+        packet.data[0] = gpuc.gp0SetPage(texture.page, true, false);
+        packet.data[1] = gpuc.gp0Rectangle(
             .{ .r = 255, .g = 255, .b = 0 },
             true,
             false,
             true,
             .px_variable,
         );
-        packet_3.data[2] = gpuc.gp0XY(clip(x), clip(y));
-        packet_3.data[3] = gpuc.gp0UvClut(texture.u, texture.v, texture.clut);
-        packet_3.data[4] = gpuc.gp0WidthHeight(32, 32);
+        packet.data[2] = gpuc.gp0XY(clip(x), clip(y));
+        packet.data[3] = gpuc.gp0UvClut(texture.u, texture.v, texture.clut);
+        packet.data[4] = gpuc.gp0WidthHeight(32, 32);
 
-        const packet_4 = allocateGp0Packet(allocator, 0);
-        packet_3.header.next = @truncate(@intFromPtr(packet_4.header));
-        packet_4.header.next = 0xFFFFFF;
+        chain.terminate();
 
         x = x +| dx;
         y = y +| dy;
@@ -350,6 +386,6 @@ pub fn main() noreturn {
         gpu.waitForGp0Ready();
         waitForVSync();
 
-        sendGpuLinkedList(@ptrCast(packet_1.header));
+        sendGpuLinkedList(@ptrCast(chain.start.header));
     }
 }

@@ -252,7 +252,7 @@ pub fn gp0FbOrigin(x: i11, y: i11) u32 {
     return @bitCast(Cmd{ .x = x, .y = y });
 }
 
-const RgbColor = packed struct(u24) {
+pub const RgbColor = packed struct(u24) {
     r: u8,
     g: u8,
     b: u8,

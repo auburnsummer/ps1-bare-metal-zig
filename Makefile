@@ -28,7 +28,8 @@ all: build/00_helloWorld.psexe\
 	build/03_dmaChain.psexe\
 	build/04_textures.psexe \
 	build/05_palettes.psexe \
-	build/06_fonts.psexe
+	build/06_fonts.psexe \
+	build/07_orderingTable.psexe
 
 .DEFAULT_GOAL := all
 
@@ -131,3 +132,16 @@ build/06_fonts.elf: $(shell find -L src/06_fonts src/ps1 src/runtime src/entry.z
 
 build/06_fonts.psexe: build/06_fonts.elf
 	uv run ./tools/convertExecutable.py build/06_fonts.elf build/06_fonts.psexe
+
+build/07_orderingTable.elf: $(shell find -L src/07_orderingTable src/ps1 src/runtime src/entry.zig -type f)
+	zig build-exe \
+		$(ZIG_FLAGS) \
+		$(ENTRY_MODULE) \
+		--dep ps1 --dep runtime \
+		-Mmain=./src/07_orderingTable/main.zig \
+		$(SHARED_MODULES) \
+		--script ./build_helpers/executable.ld \
+		-femit-bin=build/07_orderingTable.elf
+
+build/07_orderingTable.psexe: build/07_orderingTable.elf
+	uv run ./tools/convertExecutable.py build/07_orderingTable.elf build/07_orderingTable.psexe

@@ -5,9 +5,13 @@
 const std = @import("std");
 
 pub fn build(b: *std.Build) void {
-    // Use a host-native to avoid the experimental MIPS-I warning. This file
-    // does not actually produce an artifact, so it's fine.
-    const target = b.standardTargetOptions(.{});
+    // Target 32-bit MIPS little-endian platform (PS1)
+    const target = b.resolveTargetQuery(.{
+        .cpu_arch = .mips,
+        .os_tag = .freestanding,
+        .abi = .eabi,
+        .cpu_model = .baseline,
+    });
     const optimize = b.standardOptimizeOption(.{});
 
     // == Shared modules ==
@@ -35,6 +39,7 @@ pub fn build(b: *std.Build) void {
     addExample(b, check, target, optimize, ps1_mod, runtime_mod, "04_textures");
     addExample(b, check, target, optimize, ps1_mod, runtime_mod, "05_palettes");
     addExample(b, check, target, optimize, ps1_mod, runtime_mod, "06_fonts");
+    addExample(b, check, target, optimize, ps1_mod, runtime_mod, "07_orderingTable");
 }
 
 fn addExample(

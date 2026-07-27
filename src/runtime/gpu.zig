@@ -3,6 +3,8 @@ const psx = @import("ps1").registers;
 const gpuc = @import("ps1").gpu_cmd;
 const debug = @import("./debug.zig");
 
+const pcsx = @import("./pcsx.zig");
+
 pub const dma_max_chunk_size = 16;
 pub const gpa_chain_buffer_size = 1024 * 4;
 
@@ -43,7 +45,9 @@ pub fn setupGpu(
     psx.GPU_GP1.* = gpuc.gp1Blank(false);
 
     psx.DMA_DPCR.gpu.enable = true;
+    psx.DMA_DPCR.otc.enable = true;
     psx.DMA_CHCR(.gpu).* = @bitCast(@as(u32, 0));
+    psx.DMA_CHCR(.otc).* = @bitCast(@as(u32, 0));
 
     psx.GPU_GP1.* = gpuc.gp1DmaRequestMode(.cpu_to_gp0);
 }
@@ -244,4 +248,64 @@ pub const DmaChain = struct {
         const terminator: DmaPacket = .terminator(self.arena);
         self.curr.setNext(&terminator);
     }
+};
+
+/// A DmaTable is similar to a DmaChain, but it has an initial structure of empty
+/// DMA tags that are linked to each other. New packets are spliced into the structure,
+/// so these allows for 'layers' to place different packets in.
+pub const DmaTable = struct {
+    arena: std.mem.Allocator,
+    anchors: []gpuc.DmaTag,
+    pub fn init(arena: std.mem.Allocator, num_layers: u32) DmaTable {
+        debug.assert(num_layers > 0, "empty ordering table");
+        // assign memory to store the initial ordering table structure.
+        const anchors = arena.alignedAlloc(gpuc.DmaTag, .@"4", num_layers) catch unreachable;
+        var table: DmaTable = .{
+            .arena = arena,
+            .anchors = anchors,
+        };
+        std.log.info("ok {*}", .{anchors.ptr});
+        // Ask DMA to write the initial ordering table to the memory we just allocated.
+        table.clearOrderingTable();
+        return table;
+    }
+    pub fn clearOrderingTable(self: *DmaTable) void {
+        // // this is what it would be like manually:
+        // var i = self.anchors.len - 1;
+        // while (i > 0) {
+        //     self.anchors[i].len = 0;
+        //     self.anchors[i].next = @truncate(@intFromPtr(&self.anchors[i - 1]));
+        //     i = i - 1;
+        // }
+        // // the terminator.
+        // self.anchors[0].len = 0;
+        // self.anchors[0].next = 0xFFFFFF;
+
+        // Set up the OTC DMA channel to transfer a new empty ordering table to RAM.
+        // The table is always reversed and generated "backwards" (the last item in
+        // the table is the first one that will be written), so we must give DMA a
+        // pointer to the end of the table rather than its beginning.
+        psx.DMA_MADR(.otc).addr = @truncate(@intFromPtr(&self.anchors[self.anchors.len - 1]));
+        psx.DMA_BCR(.otc).* = self.anchors.len;
+        psx.DMA_CHCR(.otc).* = psx.DmaChannelControl{
+            .enable = true,
+            .reverse = true,
+            .write = false,
+            .mode = .burst,
+            .trigger = true,
+        };
+
+        // Wait for DMA to finish generating the table.
+        while (psx.DMA_CHCR(.otc).enable) {}
+    }
+    pub fn newPacket(self: *DmaTable, num_commands: u8, layer: u32) DmaPacket {
+        // make a new packet pointing to wherever the old packet pointed to.
+        const new_packet: DmaPacket = .init(self.arena, num_commands);
+        new_packet.header.next = self.anchors[layer].next;
+        // old packet points to the new packet.
+        self.anchors[layer].next = @truncate(@intFromPtr(new_packet.header));
+        return new_packet;
+    }
+    // NB: there's no more terminate() function. The ordering table already inserted
+    // a terminator packet.
 };

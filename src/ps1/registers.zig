@@ -57,7 +57,15 @@ pub const DmaControl = packed struct(u32) {
 /// 1F8010F0h - DPCR - DMA Control Register (R/W)
 pub const DMA_DPCR: *volatile DmaControl = @ptrFromInt(KSEG1 + 0x1f80_10f0);
 
-pub const DmaChannelName = enum(u3) { mdec_in, mdec_out, gpu, cdrom, spu, pio, otc };
+pub const DmaChannelName = enum(u3) {
+    mdec_in = 0,
+    mdec_out = 1,
+    gpu = 2,
+    cdrom = 3,
+    spu = 4,
+    pio = 5,
+    otc = 6,
+};
 
 pub const DmaTransferMode = enum(u2) {
     burst,
